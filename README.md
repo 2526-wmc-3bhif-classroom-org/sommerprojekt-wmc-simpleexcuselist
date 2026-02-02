@@ -3,31 +3,72 @@
 **Simple Excuse List** ist die digitale Entschuldigungsliste für Schulen – schnell, einfach und sicher.  
 Unsere Plattform ist als **Mobile App** und **Web Application** verfügbar und erleichtert den täglichen Ablauf in Schulen erheblich.
 
-## Hauptfunktionen
 
-- **Einfache Entschuldigungen**: Eltern können für Schüler unter 18 Jahren direkt Entschuldigungen einreichen.  
-- **Sicherer Zugriff**: Entschuldigungen nur mit individuellem Passwort der Eltern möglich.  
-- **Plattformübergreifend**: Verfügbar auf Smartphone, Tablet und Desktop.  
-- **Übersichtliche Listen**: Lehrer behalten alle Entschuldigungen im Blick – sortiert nach Datum, Klasse oder Schüler.  
-- **Zeitersparnis**: Kein Papierkram, kein Hin- und Hertelefonieren mehr.  
+## 1. Problemstellung
+Das aktuelle Entschuldigungssystem ist papierbasiert und ineffizient.
 
-## Zusatzideen / mögliche Features
+### Herausforderungen für Schüler
+* **Verlustgefahr:** Physische Zettel gehen leicht verloren.
+* **Medienbruch:** Zusätzliche Schritte wie Foto machen, PDF erstellen und manuelles Hochladen sind zeitaufwendig.
+* **Mangelnde Transparenz:** Kein Überblick über bereits abgegebene oder noch ausstehende Entschuldigungen.
 
-- **Automatische Benachrichtigungen**: Lehrer erhalten eine Nachricht, sobald eine Entschuldigung eingereicht wurde.  
-- **Vorlagen**: Eltern können schnell aus vordefinierten Entschuldigungsgründen auswählen oder eigene schreiben.  
-- **Statistiken & Reports**: Schulen können Auswertungen über Fehlzeiten erstellen.  
-- **Mehrsprachigkeit**: Unterstützung für verschiedene Sprachen für internationale Familien.  
-- **Datenschutz & DSGVO-konform**: Alle Daten sicher gespeichert, nur berechtigte Personen haben Zugriff.  
-- **Offline-Modus**: Entschuldigungen können auch ohne Internet vorbereitet und später hochgeladen werden.  
-
-## Vorteile
-
-- Reduziert den Papierkram in Schulen.  
-- Verbessert die Kommunikation zwischen Eltern und Lehrern.  
-- Spart Zeit für alle Beteiligten.  
-- Sicher und zuverlässig, besonders für Schüler unter 18 Jahren.  
+### Herausforderungen für Lehrkräfte
+* **Lesbarkeit:** Handschriftliche Entschuldigungen sind oft schwer zu entziffern.
+* **Verwaltungsaufwand:** Manuelle Nachverfolgung und fehlende strukturierte Daten.
+* **Mustererkennung:** Auffällige Fehlmuster bei Abwesenheiten sind schwer identifizierbar.
 
 ---
 
-**Simple Excuse List** – die smarte Lösung für moderne Schulen!
+## 2. Zielsetzung
+Entwicklung einer zentralen Webanwendung zur digitalen Verwaltung von Fehlzeiten:
+* **Digitales Einreichen** statt Zettelwirtschaft.
+* **Sichere Speicherung** und Verknüpfung mit Schulaccounts.
+* **Strukturierte Auswertung** für Lehrkräfte.
+* **Nachvollziehbarkeit** durch lückenlose Historie.
+
+> **Hinweis:** Das System ersetzt nicht das Vertrauen zwischen Schule und Elternhaus, sondern schafft eine zeitgemäße Struktur.
+
+---
+
+## 3. Benutzerrollen & Authentifizierung
+Die Anmeldung erfolgt über bestehende Schulzugangsdaten. Das System erkennt automatisch:
+* **Rolle:** Schüler oder Lehrer.
+* **Zuordnung:** Klasse des Schülers und zuständiger Klassenvorstand.
+* **Sicherheit:** Keine manuelle Registrierung nötig, dadurch Ausschluss von Fake-Accounts.
+
+---
+
+## 4. Features: Schüler-Bereich
+
+### 4.1 Dashboard & Status
+Schüler verwalten ihre Fehlzeiten in einer übersichtlichen Tabelle:
+
+| Datum | Stunden | Grund | Signatur | Anhänge | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 01.03.2026 | 1–4 | Krankheit | Vorhanden | Arzt.pdf | `Pending` |
+
+### 4.2 Signatursystem & Validierung
+* **Digitale Signatur:** Eltern unterschreiben direkt im Browser (Touch/Maus), ähnlich wie bei Paketdienstleistern.
+* **Dateiupload:** Pflichtfeld für Anhänge, falls vom Lehrer gefordert (z. B. ärztliches Attest).
+* **Bearbeitungsschutz:** Einträge können nur bearbeitet werden, solange sie auf `Pending` stehen.
+
+---
+
+## 5. Features: Lehrer-Bereich
+
+### 5.1 Verwaltung & Prüfung
+* **Klassenübersicht:** Schneller Zugriff auf alle Schüler der eigenen Klasse.
+* **Entscheidungs-Workflow:**
+    * `Accepted`: Entschuldigung wird archiviert.
+    * `Rejected`: Ablehnung mit verpflichtender Begründung an den Schüler.
+* **Individuelle Regeln:** Lehrer können für einzelne Schüler die Funktion "Nachweis erforderlich" erzwingen.
+
+### 5.2 Analyse-Dashboard
+Basierend auf den Daten (und optionaler Stundenplan-Integration) bietet das System:
+* Gesamtanzahl der Fehltage/-stunden.
+* Analyse der Fehlzeiten nach Wochentagen.
+* **Deep Dive:** Fehlzeiten pro spezifischem Fach.
+
+
+
 
