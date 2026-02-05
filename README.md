@@ -10,7 +10,7 @@ Das aktuelle Entschuldigungssystem ist papierbasiert und ineffizient.
 ### Herausforderungen für Schüler
 * **Verlustgefahr:** Physische Zettel gehen leicht verloren.
 * **Medienbruch:** Zusätzliche Schritte wie Foto machen, PDF erstellen und manuelles Hochladen sind zeitaufwendig.
-* **Mangelnde Transparenz:** Kein Überblick über bereits abgegebene oder noch ausstehende Entschuldigungen.
+* **Mangelnde Transparenz:** Kein Überblick über bereits abgegebene
 
 ### Herausforderungen für Lehrkräfte
 * **Lesbarkeit:** Handschriftliche Entschuldigungen sind oft schwer zu entziffern.
@@ -22,7 +22,6 @@ Das aktuelle Entschuldigungssystem ist papierbasiert und ineffizient.
 ## 2. Zielsetzung
 Entwicklung einer zentralen Webanwendung zur digitalen Verwaltung von Fehlzeiten:
 * **Digitales Einreichen** statt Zettelwirtschaft.
-* **Sichere Speicherung** und Verknüpfung mit Schulaccounts.
 * **Strukturierte Auswertung** für Lehrkräfte.
 * **Nachvollziehbarkeit** durch lückenlose Historie.
 
@@ -31,10 +30,7 @@ Entwicklung einer zentralen Webanwendung zur digitalen Verwaltung von Fehlzeiten
 ---
 
 ## 3. Benutzerrollen & Authentifizierung
-Die Anmeldung erfolgt über bestehende Schulzugangsdaten. Das System erkennt automatisch:
-* **Rolle:** Schüler oder Lehrer.
-* **Zuordnung:** Klasse des Schülers und zuständiger Klassenvorstand.
-* **Sicherheit:** Keine manuelle Registrierung nötig, dadurch Ausschluss von Fake-Accounts.
+ Man kann sich entweder als Schüler oder Lehrer anmelden.
 
 ---
 
@@ -43,9 +39,9 @@ Die Anmeldung erfolgt über bestehende Schulzugangsdaten. Das System erkennt aut
 ### 4.1 Dashboard & Status
 Schüler verwalten ihre Fehlzeiten in einer übersichtlichen Tabelle:
 
-| Datum | Stunden | Grund | Signatur | Anhänge | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 01.03.2026 | 1–4 | Krankheit | Vorhanden | Arzt.pdf | `Pending` |
+| Datum | Stunden | Grund | Signatur | Anhänge  |
+| :--- | :--- | :--- | :--- | :--- |
+| 01.03.2026 | 1–4 | Krankheit | Vorhanden | Arzt.pdf | 
 
 ### 4.2 Signatursystem & Validierung
 * **Digitale Signatur:** Eltern unterschreiben direkt im Browser (Touch/Maus), ähnlich wie bei Paketdienstleistern.
@@ -58,9 +54,6 @@ Schüler verwalten ihre Fehlzeiten in einer übersichtlichen Tabelle:
 
 ### 5.1 Verwaltung & Prüfung
 * **Klassenübersicht:** Schneller Zugriff auf alle Schüler der eigenen Klasse.
-* **Entscheidungs-Workflow:**
-    * `Accepted`: Entschuldigung wird archiviert.
-    * `Rejected`: Ablehnung mit verpflichtender Begründung an den Schüler.
 * **Individuelle Regeln:** Lehrer können für einzelne Schüler die Funktion "Nachweis erforderlich" erzwingen.
 
 ### 5.2 Analyse-Dashboard
@@ -69,6 +62,8 @@ Basierend auf den Daten (und optionaler Stundenplan-Integration) bietet das Syst
 * Analyse der Fehlzeiten nach Wochentagen.
 * **Deep Dive:** Fehlzeiten pro spezifischem Fach.
 
+**WICHTIG:**
+Wir versuchen nicht, WebUntis zu ersetzen, sondern den Abgabeprozess von Entschuldigungen zu erleichtern und Papierverschwendung zu verhindern.
 
 
 
