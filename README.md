@@ -65,5 +65,15 @@ Basierend auf den Daten (und optionaler Stundenplan-Integration) bietet das Syst
 **WICHTIG:**
 Wir versuchen nicht, WebUntis zu ersetzen, sondern den Abgabeprozess von Entschuldigungen zu erleichtern und Papierverschwendung zu verhindern.
 
+## 6. Features: Eltern-Bereich
+
+### 5.1 Entschuldigen der Abwesenheiten
+Zugriff auf Dashbord des Schülers
+Möglichkeit Abwesenheiten zu entschuldigen oder optional nicht entschuldigen
+
+**WICHTIG:**
+Wir versuchen nicht, WebUntis zu ersetzen, sondern den Abgabeprozess von Entschuldigungen zu erleichtern und Papierverschwendung zu verhindern.
+
+
 
 
