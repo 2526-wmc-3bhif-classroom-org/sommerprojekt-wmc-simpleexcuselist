@@ -15,17 +15,17 @@ const router = createRouter({
     {
       path: '/parent',
       name: 'parent',
-      component: ParentView
+      component: ParentView,
     },
     {
       path: '/student',
       name: 'student',
-      component: Studentview
+      component: Studentview,
     },
     {
       path: '/teacher',
       name: 'teacher',
-      component: Teacherview
+      component: Teacherview,
     }
   ],
 })
