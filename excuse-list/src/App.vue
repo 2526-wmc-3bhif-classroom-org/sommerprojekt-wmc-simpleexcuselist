@@ -5,8 +5,9 @@ import LightingMode from "@/components/LightingMode.vue";
 </script>
 
 <template>
-  <Navbar />
+
   <main class="p-8">
+    <Navbar />
     <RouterView />
   </main>
 </template>
