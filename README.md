@@ -1,3 +1,5 @@
+![Alt-Text](./excuse-list/pictures/selist.png)
+
 # Simple Excuse List
 
 **Simple Excuse List** ist die digitale Entschuldigungsliste für Schulen – schnell, einfach und sicher.  
