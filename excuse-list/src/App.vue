@@ -1,5 +1,6 @@
 <script setup>
 import Navbar from "./components/Navbar.vue"
+import Login from "./components/Login.vue"
 import { RouterView } from "vue-router"
 import LightingMode from "@/components/LightingMode.vue";
 </script>
@@ -8,6 +9,6 @@ import LightingMode from "@/components/LightingMode.vue";
 
   <main class="p-8">
     <Navbar />
-    <RouterView />
+    <Login />
   </main>
 </template>
