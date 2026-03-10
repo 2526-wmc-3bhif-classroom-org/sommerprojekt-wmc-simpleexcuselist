@@ -1,6 +1,6 @@
 <script setup>
 import { RouterLink } from "vue-router"
-import LightingModeView from "@/views/LightingModeView.vue";
+import LightingModeView from "@/components/LightingMode.vue";
 </script>
 
 <template>

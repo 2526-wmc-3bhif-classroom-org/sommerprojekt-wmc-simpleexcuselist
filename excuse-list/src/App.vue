@@ -1,11 +1,11 @@
 <script setup>
-import NavbarView from "./views/NavbarView.vue"
+import Navbar from "./components/Navbar.vue"
 import { RouterView } from "vue-router"
-import LightingModeView from "@/views/LightingModeView.vue";
+import LightingMode from "@/components/LightingMode.vue";
 </script>
 
 <template>
-  <NavbarView />
+  <Navbar />
   <main class="p-8">
     <RouterView />
   </main>
