@@ -139,13 +139,25 @@ export class DB {
             REFERENCES Class(id),
         Constraint FK_guardian FOREIGN KEY (guardianId) references Guardian(id)
       );
-        CREATE TABLE IF NOT EXISTS Guardian
-        (
-          id Text PRIMARY KEY,
-          firstName TEXT NOT NULL,
-          lastName  TEXT NOT NULL,
-          CONSTRAINT PK_student PRIMARY KEY (id)
-        )
+      CREATE TABLE IF NOT EXISTS Guardian
+      (
+        id Text PRIMARY KEY,
+        firstName TEXT NOT NULL,
+        lastName  TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS Absence
+      (
+        id TEXT PRIMARY KEY,
+        studentId TEXT NOT NULL,
+        date DATE NOT NULL,
+        reason TEXT,
+        excused BOOLEAN DEFAULT 0,
+
+        CONSTRAINT FK_student
+          FOREIGN KEY (studentId)
+            REFERENCES Student(id)
+      );
     `);
   }
 }

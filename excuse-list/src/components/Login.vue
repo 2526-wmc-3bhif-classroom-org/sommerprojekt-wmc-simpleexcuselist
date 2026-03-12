@@ -2,7 +2,7 @@
   <div class="flex items-center justify-center min-h-6.25rem-screen">
 
     <fieldset class="fieldset bg-base-200 border-base-400 rounded-box w-xl border p-6">
-      <img src="../../pictures/selist-removebg-preview.png">
+      <img src="../../pictures/selist-transparent.png">
       <label class="label">Email</label>
       <input type="email" class="input w-full" placeholder="Email" />
 
