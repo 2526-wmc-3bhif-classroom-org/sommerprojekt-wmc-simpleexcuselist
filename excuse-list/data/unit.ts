@@ -1,14 +1,16 @@
 import BetterSqlite3 from "better-sqlite3";
-import type {Database} from "better-sqlite3";
+import type { Database } from "better-sqlite3";
 
 const dbFileName = "excuselist.db";
 
 export class Unit {
-
   private readonly db: Database;
   private completed: boolean;
+  // Hier die Eigenschaft explizit deklarieren für Node.js Kompatibilität
+  public readonly readOnly: boolean;
 
-  public constructor(public readonly readOnly: boolean) {
+  public constructor(readOnly: boolean) {
+    this.readOnly = readOnly; // Wert manuell zuweisen
     this.completed = false;
     this.db = DB.createDBConnection();
     if (!this.readOnly) {
@@ -49,22 +51,6 @@ export class Unit {
     }
     this.db.close();
   }
-}
-
-export function ensureSampleDataInserted(unit: Unit): "inserted" | "skipped" {
-  function alreadyPresent(): boolean {
-    return true;
-  }
-
-  function insert(): void {
-    // Planes
-  }
-
-  if (!(alreadyPresent())) {
-    insert();
-    return "inserted";
-  }
-  return "skipped";
 }
 
 export class DB {
@@ -111,6 +97,7 @@ export class DB {
         id        TEXT NOT NULL,
         firstName TEXT NOT NULL,
         lastName  TEXT NOT NULL,
+        password TEXT NOT NULL,
         CONSTRAINT PK_teacher PRIMARY KEY (id)
       );
 
@@ -132,6 +119,7 @@ export class DB {
         lastName  TEXT NOT NULL,
         classId   INTEGER NOT NULL,
         guardianId Text NOT NULL,
+        password TEXT NOT NULL,
 
         CONSTRAINT PK_student PRIMARY KEY (id),
         CONSTRAINT FK_class
@@ -143,7 +131,8 @@ export class DB {
       (
         id Text PRIMARY KEY,
         firstName TEXT NOT NULL,
-        lastName  TEXT NOT NULL
+        lastName  TEXT NOT NULL,
+        password Text Not Null
       );
 
       CREATE TABLE IF NOT EXISTS Absence

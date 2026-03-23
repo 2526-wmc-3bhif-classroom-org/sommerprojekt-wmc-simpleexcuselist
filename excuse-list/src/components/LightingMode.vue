@@ -1,6 +1,18 @@
+<script setup>
+import { onMounted } from 'vue';
+
+const toggleTheme = (e) => {
+  if (!e.target.checked) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+}
+</script>
+
 <template>
-  <label class="swap swap-rotate">
-    <input type="checkbox" />
+  <label class="swap swap-rotate scale-75">
+    <input type="checkbox" @change="toggleTheme" />
 
     <svg
       class="swap-on h-5 w-5 fill-current"
