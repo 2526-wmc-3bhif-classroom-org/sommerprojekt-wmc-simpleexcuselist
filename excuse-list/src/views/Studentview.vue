@@ -27,4 +27,8 @@
       </tbody>
     </table>
   </div>
+
+  <button class="btn mt--10">
+     Add Excuse
+  </button>
 </template>
