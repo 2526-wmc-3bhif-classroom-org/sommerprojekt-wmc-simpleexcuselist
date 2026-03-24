@@ -1,4 +1,3 @@
-![Alt-Text](.excuse-list/pictures/selist-transparent.png)
 
 # Simple Excuse List
 
