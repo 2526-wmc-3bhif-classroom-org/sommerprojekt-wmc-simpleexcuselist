@@ -8,7 +8,7 @@ import logo from '@/assets/selist.png';
   <div class="navbar bg-base-100 shadow-md px-6">
 
     <div class="flex-1 flex items-center gap-2">
-      <img :src="logo" alt="Logo" class="h-8 w-auto" />
+      <img src="../../pictures/selist-transparent.png" alt="Logo" class="h-8 w-auto" />
       <RouterLink to="/" class="text-xl font-bold">
         Excuse List
       </RouterLink>
