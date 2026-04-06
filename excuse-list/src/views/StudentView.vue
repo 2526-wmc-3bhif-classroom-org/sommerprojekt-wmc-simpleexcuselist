@@ -44,8 +44,8 @@ const fetchAbsences = async () => {
     console.log('Fetching absences...');
     const response = await fetch('http://localhost:3000/api/absences', {
       headers: {
-        'Authorization': `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     console.log('Response status:', response.status);
@@ -81,54 +81,113 @@ const signExcuse = (id: number) => {
 </script>
 
 <template>
-  <div class="container mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-6">Open Absences</h1>
-
-    <div v-if="loading" class="flex justify-center p-10">
-      <span class="loading loading-spinner loading-lg"></span>
-    </div>
-
-    <div v-else-if="error" class="alert alert-error mb-6">
-      <span>{{ error }}</span>
-    </div>
-
-    <div v-else-if="absences.length === 0" class="card bg-base-200 shadow-xl p-10 text-center">
-      <div class="card-body">
-        <h2 class="card-title justify-center">No unexcused absences!</h2>
-        <p>Everything is fine. You are a good student.</p>
+  <div class="p-6 bg-slate-50 min-h-screen text-slate-800">
+    <div class="max-w-[1600px] mx-auto flex justify-between items-center mb-10">
+      <div>
+        <h1 class="text-3xl font-black text-slate-900 uppercase tracking-tighter">
+          Student Dashboard
+        </h1>
+        <p class="text-slate-500 text-sm italic">Offene Fehlstunden</p>
+      </div>
+      <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-200 text-right">
+        <span class="text-slate-400 text-[10px] font-black uppercase block tracking-widest"
+          >Offen</span
+        >
+        <span class="text-2xl font-black text-blue-600">{{
+          absences.length
+        }}</span>
       </div>
     </div>
 
-    <div v-else class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100 shadow-lg">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Date</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(absence, index) in absences" :key="absence.id">
-            <th>{{ index + 1 }}</th>
-            <td>{{ formatDate(absence.startDate) }}</td>
-            <td>{{ formatTime(absence.startTime) }}</td>
-            <td>{{ formatTime(absence.endTime) }}</td>
-            <td>
-              <button class="btn btn-sm btn-outline btn-accent" @click="signExcuse(absence.id)">
-                Sign/Excuse
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <div class="max-w-[1600px] mx-auto space-y-6">
+      <div v-if="loading" class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg text-blue-600"></span>
+      </div>
 
-    <div v-if="!loading" class="mt-6 flex justify-between">
-      <button class="btn" @click="fetchAbsences">Refresh</button>
-      <button class="btn btn-ghost" @click="router.push('/')">Logout</button>
+      <div
+        v-else-if="error"
+        class="bg-white border border-red-100 text-red-600 rounded-3xl shadow-sm px-8 py-6 flex items-center gap-3"
+      >
+        <div class="h-2 w-2 rounded-full bg-red-500"></div>
+        <div>
+          <p class="font-bold text-sm uppercase tracking-widest">
+            Fehler beim Laden
+          </p>
+          <p class="text-sm">{{ error }}</p>
+        </div>
+      </div>
+
+      <div
+        v-else-if="absences.length === 0"
+        class="bg-white border border-emerald-100 rounded-3xl shadow-sm px-8 py-10 text-center"
+      >
+        <h2 class="text-xl font-black text-emerald-600 mb-2">
+          Keine unentschuldigten Fehlstunden
+        </h2>
+        <p class="text-slate-500">
+          Alles in Ordnung – es liegen aktuell keine offenen Fehlstunden vor.
+        </p>
+      </div>
+
+      <div
+        v-else
+        class="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden"
+      >
+        <table class="table w-full">
+          <thead class="bg-slate-50/50">
+            <tr class="text-slate-400 uppercase text-[11px] tracking-widest border-b border-slate-100">
+              <th class="py-5 px-10">#</th>
+              <th>Datum</th>
+              <th>Von</th>
+              <th>Bis</th>
+              <th class="text-center px-10">Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(absence, index) in absences"
+              :key="absence.id"
+              class="hover:bg-blue-50/20 transition-colors border-b border-slate-50 last:border-0"
+            >
+              <td class="py-4 px-10 font-bold text-slate-700">
+                {{ index + 1 }}
+              </td>
+              <td class="text-slate-500 text-sm">
+                {{ formatDate(absence.startDate) }}
+              </td>
+              <td class="text-slate-500 text-sm">
+                {{ formatTime(absence.startTime) }}
+              </td>
+              <td class="text-slate-500 text-sm">
+                {{ formatTime(absence.endTime) }}
+              </td>
+              <td class="text-center px-10">
+                <button
+                  class="btn btn-sm rounded-xl btn-primary text-white font-bold uppercase text-[11px] tracking-widest"
+                  @click="signExcuse(absence.id)"
+                >
+                  Sign/Excuse
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="!loading" class="flex justify-between items-center pt-4">
+        <button
+          class="btn btn-ghost rounded-xl text-xs uppercase font-bold text-slate-500 border border-slate-200 bg-white"
+          @click="router.push('/')"
+        >
+          Logout
+        </button>
+        <button
+          class="btn btn-primary rounded-xl text-xs uppercase font-black tracking-widest px-6"
+          @click="fetchAbsences"
+        >
+          Refresh
+        </button>
+      </div>
     </div>
   </div>
 </template>
