@@ -108,5 +108,24 @@ const rejectExcuse = (id: number) => {
 </script>
 
 <template>
+  <div class="p-6 bg-slate-50 min-h-screen text-slate-800">
+    <div class="max-w-[1600px] mx-auto flex justify-between items-center mb-10">
+      <div>
+        <h1 class="text-3xl font-black text-slate-900 uppercase tracking-tighter">
+          Eltern Dashboard
+        </h1>
+        <p class="text-slate-500 text-sm italic">Entschuldigungen zur Bestätigung</p>
+      </div>
+      <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-200 text-right">
+        <span class="text-slate-400 text-[10px] font-black uppercase block tracking-widest"
+          >Ausstehend</span
+        >
+        <span class="text-2xl font-black text-orange-600">{{
+          excuses.filter(e => e.status === 'pending').length
+        }}</span>
+      </div>
+    </div>
+
+    <div class="max-w-[1600px] mx-auto space-y-6">
 </template>
 
