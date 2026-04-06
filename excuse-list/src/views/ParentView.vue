@@ -47,6 +47,22 @@ const excuses = ref<Excuse[]>([
 ]);
 
 const router = useRouter();
+
+const formatDate = (dateNum: number) => {
+  if (!dateNum) return 'N/A';
+  const dateStr = dateNum.toString();
+  const year = dateStr.substring(0, 4);
+  const month = dateStr.substring(4, 6);
+  const day = dateStr.substring(6, 8);
+  return `${day}.${month}.${year}`;
+};
+
+const formatTime = (timeNum: number) => {
+  const timeStr = timeNum.toString().padStart(4, '0');
+  const hours = timeStr.substring(0, 2);
+  const minutes = timeStr.substring(2, 4);
+  return `${hours}:${minutes}`;
+};
 </script>
 
 <template>
