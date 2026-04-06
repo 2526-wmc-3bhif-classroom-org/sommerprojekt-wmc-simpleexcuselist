@@ -143,5 +143,69 @@ const rejectExcuse = (id: number) => {
         v-else
         class="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden"
       >
+        <table class="table w-full">
+          <thead class="bg-slate-50/50">
+            <tr class="text-slate-400 uppercase text-[11px] tracking-widest border-b border-slate-100">
+              <th class="py-5 px-10">#</th>
+              <th>Schüler</th>
+              <th>Datum</th>
+              <th>Von</th>
+              <th>Bis</th>
+              <th>Grund</th>
+              <th class="text-center">Status</th>
+              <th class="text-center px-10">Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(excuse, index) in excuses"
+              :key="excuse.id"
+              class="hover:bg-blue-50/20 transition-colors border-b border-slate-50 last:border-0"
+            >
+              <td class="py-4 px-10 font-bold text-slate-700">
+                {{ index + 1 }}
+              </td>
+              <td class="text-slate-700 text-sm font-semibold">
+                {{ excuse.studentName }}
+              </td>
+              <td class="text-slate-500 text-sm">
+                {{ formatDate(excuse.startDate) }}
+              </td>
+              <td class="text-slate-500 text-sm">
+                {{ formatTime(excuse.startTime) }}
+              </td>
+              <td class="text-slate-500 text-sm">
+                {{ formatTime(excuse.endTime) }}
+              </td>
+              <td class="text-slate-500 text-sm">
+                {{ excuse.reason }}
+              </td>
+              <td class="text-center">
+                <span :class="getStatusBadge(excuse.status)" class="text-xs font-bold">
+                  {{ getStatusText(excuse.status) }}
+                </span>
+              </td>
+              <td class="text-center px-10">
+                <div class="flex gap-2 justify-center">
+                  <button
+                    v-if="excuse.status === 'pending'"
+                    class="btn btn-sm rounded-xl btn-success text-white font-bold uppercase text-[11px] tracking-widest"
+                    @click="signExcuse(excuse.id)"
+                  >
+                    Unterschreiben
+                  </button>
+                  <button
+                    v-if="excuse.status === 'pending'"
+                    class="btn btn-sm rounded-xl btn-error text-white font-bold uppercase text-[11px] tracking-widest"
+                    @click="rejectExcuse(excuse.id)"
+                  >
+                    Ablehnen
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 </template>
 
