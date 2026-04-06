@@ -127,5 +127,21 @@ const rejectExcuse = (id: number) => {
     </div>
 
     <div class="max-w-[1600px] mx-auto space-y-6">
+      <div
+        v-if="excuses.length === 0"
+        class="bg-white border border-emerald-100 rounded-3xl shadow-sm px-8 py-10 text-center"
+      >
+        <h2 class="text-xl font-black text-emerald-600 mb-2">
+          Keine ausstehenden Entschuldigungen
+        </h2>
+        <p class="text-slate-500">
+          Alle Entschuldigungen wurden überprüft und unterzeichnet.
+        </p>
+      </div>
+
+      <div
+        v-else
+        class="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden"
+      >
 </template>
 
