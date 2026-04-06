@@ -207,5 +207,21 @@ const rejectExcuse = (id: number) => {
           </tbody>
         </table>
       </div>
+
+      <div class="flex justify-between items-center pt-4">
+        <button
+          class="btn btn-ghost rounded-xl text-xs uppercase font-bold text-slate-500 border border-slate-200 bg-white"
+          @click="router.push('/')"
+        >
+          Logout
+        </button>
+        <button
+          class="btn btn-primary rounded-xl text-xs uppercase font-black tracking-widest px-6"
+        >
+          Refresh
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
