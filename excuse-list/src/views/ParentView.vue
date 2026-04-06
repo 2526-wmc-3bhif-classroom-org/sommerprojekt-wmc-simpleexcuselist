@@ -63,6 +63,32 @@ const formatTime = (timeNum: number) => {
   const minutes = timeStr.substring(2, 4);
   return `${hours}:${minutes}`;
 };
+
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return 'badge badge-warning';
+    case 'signed':
+      return 'badge badge-success';
+    case 'rejected':
+      return 'badge badge-error';
+    default:
+      return 'badge';
+  }
+};
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return 'Ausstehend';
+    case 'signed':
+      return 'Unterzeichnet';
+    case 'rejected':
+      return 'Abgelehnt';
+    default:
+      return status;
+  }
+};
 </script>
 
 <template>
