@@ -89,6 +89,22 @@ const getStatusText = (status: string) => {
       return status;
   }
 };
+
+const signExcuse = (id: number) => {
+  const excuse = excuses.value.find(e => e.id === id);
+  if (excuse) {
+    excuse.status = 'signed';
+    console.log('Excuse signed:', id);
+  }
+};
+
+const rejectExcuse = (id: number) => {
+  const excuse = excuses.value.find(e => e.id === id);
+  if (excuse) {
+    excuse.status = 'rejected';
+    console.log('Excuse rejected:', id);
+  }
+};
 </script>
 
 <template>
