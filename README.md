@@ -31,7 +31,7 @@ Entwicklung einer zentralen Webanwendung zur digitalen Verwaltung von Fehlzeiten
 ---
 
 ## 3. Benutzerrollen & Authentifizierung
- Man kann sich entweder als Schüler oder Lehrer anmelden.
+ Man kann sich entweder als Schüler/Eltern oder Lehrer anmelden.
 
 ---
 
@@ -47,7 +47,6 @@ Schüler verwalten ihre Fehlzeiten in einer übersichtlichen Tabelle:
 ### 4.2 Signatursystem & Validierung
 * **Digitale Signatur:** Eltern unterschreiben direkt im Browser (Touch/Maus), ähnlich wie bei Paketdienstleistern.
 * **Dateiupload:** Pflichtfeld für Anhänge, falls vom Lehrer gefordert (z. B. ärztliches Attest).
-* **Bearbeitungsschutz:** Einträge können nur bearbeitet werden, solange sie auf `Pending` stehen.
 
 ---
 
