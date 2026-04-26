@@ -10,7 +10,7 @@ const router = useRouter();
 const login = async () => {
   error.value = '';
   try {
-    const response = await fetch('http://localhost:3000/api/login', {
+    const response = await fetch('/api/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -27,6 +27,7 @@ const login = async () => {
 
     const data = await response.json();
     localStorage.setItem('untis_jwt', data.token);
+
     router.push('/student');
   } catch (err: any) {
     error.value = err.message || 'Login failed';
@@ -42,16 +43,16 @@ const login = async () => {
       </figure>
       <div class="card-body">
         <h2 class="card-title justify-center mb-4">Login to WebUntis</h2>
-        
+
         <div class="form-control">
           <label class="label">
             <span class="label-text">Username</span>
           </label>
-          <input 
-            v-model="username" 
-            type="text" 
-            class="input input-bordered w-full" 
-            placeholder="Username" 
+          <input
+            v-model="username"
+            type="text"
+            class="input input-bordered w-full"
+            placeholder="Username"
             required
           />
         </div>
@@ -60,11 +61,11 @@ const login = async () => {
           <label class="label">
             <span class="label-text">Password</span>
           </label>
-          <input 
-            v-model="password" 
-            type="password" 
-            class="input input-bordered w-full" 
-            placeholder="Password" 
+          <input
+            v-model="password"
+            type="password"
+            class="input input-bordered w-full"
+            placeholder="Password"
             required
             @keyup.enter="login"
           />

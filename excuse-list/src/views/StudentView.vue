@@ -42,7 +42,7 @@ const fetchAbsences = async () => {
 
   try {
     console.log('Fetching absences...');
-    const response = await fetch('http://localhost:3000/api/absences', {
+    const response = await fetch('/api/absences', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -74,6 +74,11 @@ const fetchAbsences = async () => {
 };
 
 onMounted(fetchAbsences);
+
+const logout = () => {
+  localStorage.removeItem('untis_jwt');
+  router.push('/');
+};
 
 const signExcuse = (id: number) => {
   console.log('Signing excuse for id:', id);
@@ -177,7 +182,7 @@ const signExcuse = (id: number) => {
       <div v-if="!loading" class="flex justify-between items-center pt-4">
         <button
           class="btn btn-ghost rounded-xl text-xs uppercase font-bold text-slate-500 border border-slate-200 bg-white"
-          @click="router.push('/')"
+          @click="logout"
         >
           Logout
         </button>
