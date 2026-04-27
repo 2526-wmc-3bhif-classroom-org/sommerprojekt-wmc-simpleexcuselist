@@ -24,6 +24,7 @@ app.post('/api/login', async (req, res) => {
 
   const untis = new WebUntis(school, username, password, url);
 
+
   try {
     await untis.login();
     await untis.logout();
@@ -73,6 +74,50 @@ try {
   res.status(401).json({ error: 'Unauthorized or error fetching data', details: error.message });
 }
 });
+
+app.get('/api/getAllStudents', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  let untis: WebUntis | null = null;
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as { username: string; password: string };
+
+    untis = new WebUntis(school, decoded.username, decoded.password, url);
+    await untis.login();
+
+    const students = await untis.getStudents();
+
+    // Nur die Felder, die du im Frontend wirklich brauchst
+    const mapped = students.map((s: any) => ({
+      id: s.id,
+      foreName: s.foreName,
+      lastName: s.longName || s.name,
+      displayName: `${s.foreName ?? ''} ${s.longName ?? s.name ?? ''}`.trim(),
+    }));
+
+    return res.json(mapped);
+  } catch (error: any) {
+    console.error('Error fetching students:', error);
+    return res.status(500).json({
+      error: 'Could not fetch students',
+      details: error.message,
+    });
+  } finally {
+    if (untis) {
+      try {
+        await untis.logout();
+      } catch {
+        // ignore logout errors
+      }
+    }
+  }
+});
+
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

@@ -1,5 +1,14 @@
-import BetterSqlite3 from "better-sqlite3";
+import { createRequire } from "node:module";
 import type { Database } from "better-sqlite3";
+
+const require = createRequire(import.meta.url);
+const BetterSqlite3 = require("better-sqlite3") as new (
+  fileName: string,
+  options?: {
+    fileMustExist?: boolean;
+    verbose?: (s: unknown) => void;
+  }
+) => Database;
 
 const dbFileName = "excuselist.db";
 
@@ -91,63 +100,116 @@ export class DB {
   }
 
   private static ensureTablesCreated(connection: Database): void {
+    const studentColumns = DB.getTableColumns(connection, "Student");
+    const absenceColumns = DB.getTableColumns(connection, "Absence");
+
+    const hasLegacyStudentSchema = studentColumns.includes("classId") || studentColumns.includes("guardianId") || studentColumns.includes("password");
+    const hasLegacyAbsenceSchema = absenceColumns.includes("studentId") || absenceColumns.includes("excused");
+
+    if (hasLegacyStudentSchema || hasLegacyAbsenceSchema) {
+      DB.rebuildDatabase(connection);
+      return;
+    }
+
+    DB.createCurrentSchema(connection);
+  }
+
+  private static rebuildDatabase(connection: Database): void {
+    connection.pragma("foreign_keys = OFF");
     connection.exec(`
-      CREATE TABLE IF NOT EXISTS Teacher
-      (
-        id        TEXT NOT NULL,
-        firstName TEXT NOT NULL,
-        lastName  TEXT NOT NULL,
-        password TEXT NOT NULL,
-        CONSTRAINT PK_teacher PRIMARY KEY (id)
-      );
+      DROP TABLE IF EXISTS Excuse;
+      DROP TABLE IF EXISTS StudentParent;
+      DROP TABLE IF EXISTS ClassTeacher;
+      DROP TABLE IF EXISTS Absence;
+      DROP TABLE IF EXISTS Parent;
+      DROP TABLE IF EXISTS Student;
+      DROP TABLE IF EXISTS Teacher;
+      DROP TABLE IF EXISTS Class;
+      DROP TABLE IF EXISTS Guardian;
+    `);
+    connection.pragma("foreign_keys = ON");
 
-      CREATE TABLE IF NOT EXISTS Class
-      (
-        id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        classTeacherId TEXT,
+    DB.createCurrentSchema(connection);
+  }
 
-        CONSTRAINT FK_classTeacherId
-          FOREIGN KEY (classTeacherId)
-            REFERENCES Teacher(id)
-      );
-
+  private static createCurrentSchema(connection: Database): void {
+    connection.exec(`
       CREATE TABLE IF NOT EXISTS Student
       (
-        id        TEXT NOT NULL,
+        untisId   INTEGER PRIMARY KEY,
         firstName TEXT NOT NULL,
         lastName  TEXT NOT NULL,
-        classId   INTEGER NOT NULL,
-        guardianId Text NOT NULL,
-        password TEXT NOT NULL,
-
-        CONSTRAINT PK_student PRIMARY KEY (id),
-        CONSTRAINT FK_class
-          FOREIGN KEY (classId)
-            REFERENCES Class(id),
-        Constraint FK_guardian FOREIGN KEY (guardianId) references Guardian(id)
+        className TEXT NOT NULL,
+        lastSync  TEXT DEFAULT CURRENT_TIMESTAMP
       );
-      CREATE TABLE IF NOT EXISTS Guardian
+
+      CREATE TABLE IF NOT EXISTS Parent
       (
-        id Text PRIMARY KEY,
-        firstName TEXT NOT NULL,
-        lastName  TEXT NOT NULL,
-        password Text Not Null
+        id           TEXT PRIMARY KEY,
+        username     TEXT NOT NULL UNIQUE,
+        passwordHash TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        createdAt    TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS StudentParent
+      (
+        parentId       TEXT NOT NULL,
+        studentUntisId INTEGER NOT NULL,
+
+        PRIMARY KEY (parentId, studentUntisId),
+
+        FOREIGN KEY (parentId) REFERENCES Parent(id) ON DELETE CASCADE,
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS Absence
       (
-        id TEXT PRIMARY KEY,
-        studentId TEXT NOT NULL,
-        date DATE NOT NULL,
-        reason TEXT,
-        excused BOOLEAN DEFAULT 0,
+        id             TEXT PRIMARY KEY,
+        untisId        INTEGER NOT NULL UNIQUE,
+        studentUntisId INTEGER NOT NULL,
+        date           TEXT NOT NULL,
+        lesson         INTEGER,
+        isExcusedUntis INTEGER DEFAULT 0,
+        status         TEXT NOT NULL DEFAULT 'open',
+        createdAt      TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt      TEXT DEFAULT CURRENT_TIMESTAMP,
 
-        CONSTRAINT FK_student
-          FOREIGN KEY (studentId)
-            REFERENCES Student(id)
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS Excuse
+      (
+        id        TEXT PRIMARY KEY,
+        absenceId TEXT NOT NULL,
+        parentId  TEXT NOT NULL,
+        message   TEXT,
+        status    TEXT NOT NULL DEFAULT 'pending',
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (absenceId) REFERENCES Absence(id) ON DELETE CASCADE,
+        FOREIGN KEY (parentId) REFERENCES Parent(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS ClassTeacher
+      (
+        className      TEXT PRIMARY KEY,
+        teacherUntisId INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_student_class ON Student(className);
+      CREATE INDEX IF NOT EXISTS idx_absence_student ON Absence(studentUntisId);
+      CREATE INDEX IF NOT EXISTS idx_absence_status ON Absence(status);
+      CREATE INDEX IF NOT EXISTS idx_excuse_absence ON Excuse(absenceId);
+      CREATE INDEX IF NOT EXISTS idx_studentparent_parent ON StudentParent(parentId);
     `);
+  }
+
+  private static getTableColumns(connection: Database, tableName: string): string[] {
+    const safeTableName = tableName.replace(/"/g, '""');
+    const rows = connection.prepare(`PRAGMA table_info("${safeTableName}")`).all() as Array<{ name: string }>;
+    return rows.map((row) => row.name);
   }
 }
 
