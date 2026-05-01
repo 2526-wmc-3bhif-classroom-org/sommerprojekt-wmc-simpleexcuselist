@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { WebUntis } from 'webuntis';
+import crypto from 'node:crypto';
+import {Unit} from "../data/unit";
 
 dotenv.config();
 
@@ -33,19 +35,121 @@ app.use(express.json());
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
   try {
-    console.log('Attempting login for:', username);
-    await withUntis(username, password, async (untis) => {
+    const result = await withUntis(username, password, async (untis) => {
+
+      // 1. get session (only gives ID)
       const session = untis.sessionInformation;
-      console.log('Logged in, personId:', session?.personId);
+      const personId = session.personId;
+
+      // 2. fetch timetable (for name + class)
+      const start = new Date();
+      const end = new Date();
+      end.setDate(end.getDate() + 7);
+
+      const timetable = await untis.getOwnTimetableForRange(start, end);
+
+      let firstName = username;
+      let lastName = "";
+      let className = "UNKNOWN";
+
+      for (const lesson of timetable) {
+
+        // extract class
+        if (lesson.kl && lesson.kl.length > 0) {
+          className = lesson.kl[0].name;
+        }
+
+        // extract name (student or teacher)
+        const me =
+          lesson.st?.find(s => s.id === personId) ||
+          lesson.te?.find(t => t.id === personId);
+
+        if (me) {
+          firstName = me.foreName || firstName;
+          lastName = me.longName || lastName;
+        }
+
+        if (className !== "UNKNOWN" && firstName !== username) {
+          break;
+        }
+      }
+      const db = new Unit(false);
+      try {
+        // 3. UPSERT student
+        db.prepare(`
+        INSERT INTO Student (untisId, firstName, lastName, className)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(untisId)
+        DO UPDATE SET
+          firstName = excluded.firstName,
+          lastName = excluded.lastName,
+          className = excluded.className
+      `).run(
+        personId,
+        firstName,
+        lastName,
+        className
+      );
+
+
+       // 4. fetch absences
+       const startDate = new Date('2025-09-01');
+       const endDate = new Date();
+
+       let absences: any[] = [];
+       try {
+         const result = await untis.getAbsentLesson(startDate, endDate);
+         absences = Array.isArray(result) ? result : (result?.absences || []);
+       } catch (e) {
+         console.warn('Could not fetch absences:', e);
+       }
+
+       // 5. store absences
+       const stmt = db.prepare(`
+         INSERT INTO Absence (id, untisId, studentUntisId, date, startTime, endTime, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'open')
+         ON CONFLICT(untisId) DO NOTHING
+       `);
+
+       for (const a of absences) {
+         stmt.run(
+           crypto.randomUUID(),
+           a.id,
+           personId,
+           a.startDate || a.date,
+           a.startTime || 0,
+           a.endTime || 0
+         );
+       }
+
+       // 6. JWT (FIXED — no password!)
+       const token = jwt.sign(
+         {
+           untisId: personId,
+           username,
+           role: "student"
+         },
+         jwtSecret,
+         { expiresIn: '1h' }
+       );
+
+       db.complete(true); // Commit the transaction
+       return { token, absences };
+
+      } catch (err) {
+        db.complete(false); // Rollback on error
+        throw err;
+      }
     });
 
-    const token = jwt.sign({ username, password }, jwtSecret, { expiresIn: '1h' });
-    res.json({ token });
+    res.json(result);
+
   } catch (error: any) {
     console.error('Login error:', error.message);
     res.status(401).json({ error: 'Invalid credentials' });
@@ -63,18 +167,22 @@ app.get('/api/absences', async (req, res) => {
     const decoded = jwt.verify(token, jwtSecret) as any;
     console.log(`Fetching absences for user: ${decoded.username}`);
 
-    const absences = await withUntis(decoded.username, decoded.password, async (untis) => {
-      const startDate = new Date('2025-09-01');
-      const endDate = new Date();
-      const result = await untis.getAbsentLesson(startDate, endDate, -1);
-      return result.absences ?? [];
-    });
+    const db = new Unit(true); // Read-only
+
+    // Fetch absences from database
+    const absences = db.prepare(`
+      SELECT * FROM Absence
+      WHERE studentUntisId = ?
+      ORDER BY date DESC
+    `).all(decoded.untisId);
 
     console.log(`Fetched ${absences.length} total absences`);
 
-    const unexcused = absences.filter((a) => a.isExcused === false && !a.excuseStatus);
+    // Filter to unexcused only
+    const unexcused = (absences as any[]).filter((a) => a.status === 'open');
     console.log(`Filtered to ${unexcused.length} unexcused absences`);
 
+    db.complete(null); // Close the database connection
     res.json(unexcused);
   } catch (error: any) {
     console.error('Error fetching absences:', error.message);

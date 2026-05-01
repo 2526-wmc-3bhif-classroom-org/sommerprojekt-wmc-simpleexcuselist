@@ -168,8 +168,9 @@ export class DB {
         id             TEXT PRIMARY KEY,
         untisId        INTEGER NOT NULL UNIQUE,
         studentUntisId INTEGER NOT NULL,
-        date           TEXT NOT NULL,
-        lesson         INTEGER,
+        date           INTEGER NOT NULL,
+        startTime      INTEGER NOT NULL,
+        endTime        INTEGER NOT NULL,
         isExcusedUntis INTEGER DEFAULT 0,
         status         TEXT NOT NULL DEFAULT 'open',
         createdAt      TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -211,6 +212,10 @@ export class DB {
     const rows = connection.prepare(`PRAGMA table_info("${safeTableName}")`).all() as Array<{ name: string }>;
     return rows.map((row) => row.name);
   }
+
+  private static addStudent(){
+
+  }
 }
 
 type RawStatement<TResult> = BetterSqlite3.Statement<any[], TResult>;
@@ -227,3 +232,4 @@ export interface ITypedStatement<TResult = unknown, TParams = unknown> {
   // accept variadic args to match BetterSqlite3.Statement.run signature
   run(...args: any[]): RunResult;
 }
+
