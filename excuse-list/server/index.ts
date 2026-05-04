@@ -164,19 +164,23 @@ async function syncAndGetAbsences(db: Unit, untis: WebUntis, personId: number) {
   }
 
   const stmt = db.prepare(`
-    INSERT INTO Absence (id, untisId, studentUntisId, date, startTime, endTime, status)
-    VALUES (?, ?, ?, ?, ?, ?, 'open')
-    ON CONFLICT(untisId) DO NOTHING
+    INSERT INTO Absence (id, untisId, studentUntisId, date, startTime, endTime, isExcusedUntis, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'open')
+    ON CONFLICT(untisId) DO UPDATE SET
+      isExcusedUntis = excluded.isExcusedUntis
   `);
 
   for (const a of absences) {
+    const isExcused = (a.isExcused !== false || a.excuseStatus) ? 1 : 0;
+
     stmt.run(
       crypto.randomUUID(),
       a.id,
       personId,
       a.startDate || a.date,
       a.startTime || 0,
-      a.endTime || 0
+      a.endTime || 0,
+      isExcused
     );
   }
   return absences;
@@ -257,7 +261,7 @@ app.get('/api/absences', async (req, res) => {
     console.log(`Fetched ${absences.length} total absences`);
 
     // Filter to unexcused only
-    const unexcused = (absences as any[]).filter((a) => a.status === 'open');
+    const unexcused = (absences as any[]).filter((a) => a.status === 'open' && a.isExcusedUntis === 0);
     console.log(`Filtered to ${unexcused.length} unexcused absences`);
 
     db.complete(null); // Close the database connection

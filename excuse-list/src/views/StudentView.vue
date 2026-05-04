@@ -3,13 +3,13 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 interface Absence {
-  id: number;
-  startDate: number;
+  id: string;
+  untisId: number;
+  date: number;
   startTime: number;
   endTime: number;
-  text: string;
-  isExcused: boolean;
-  excuseStatus: string | null;
+  isExcusedUntis: number;
+  status: string;
 }
 
 const absences = ref<Absence[]>([]);
@@ -158,7 +158,7 @@ const signExcuse = (id: number) => {
                 {{ index + 1 }}
               </td>
               <td class="text-slate-500 text-sm">
-                {{ formatDate(absence.startDate) }}
+                {{ formatDate(absence.date) }}
               </td>
               <td class="text-slate-500 text-sm">
                 {{ formatTime(absence.startTime) }}
