@@ -60,17 +60,39 @@ app.post('/api/login', async (req, res) => {
       // 1. get session (only gives ID)
       const session = untis.sessionInformation;
       const personId = session.personId;
+      const personType = session.personType; // 5 = Student, 2 = Teacher
 
-      // 2. fetch timetable (for name + class)
+      let firstName = username;
+      let lastName = "";
+      let className = "UNKNOWN";
+
+      // 1.5 fetch precise names from master data using WebUntis config
+      try {
+        if (personType === 5) {
+          const students = await untis.getStudents();
+          const me = students.find((s: any) => s.id === personId);
+          if (me) {
+            firstName = me.foreName || firstName;
+            lastName = me.longName || lastName;
+          }
+        } else if (personType === 2) {
+          const teachers = await untis.getTeachers();
+          const me = teachers.find((t: any) => t.id === personId);
+          if (me) {
+            firstName = me.foreName || firstName;
+            lastName = me.longName || lastName;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch user master data:", err);
+      }
+
+      // 2. fetch timetable (for class name & fallback for name)
       const start = new Date();
       const end = new Date();
       end.setDate(end.getDate() + 7);
 
       const timetable = await untis.getOwnTimetableForRange(start, end);
-
-      let firstName = username;
-      let lastName = "";
-      let className = "UNKNOWN";
 
       for (const lesson of timetable) {
 
@@ -79,17 +101,17 @@ app.post('/api/login', async (req, res) => {
           className = lesson.kl[0].name;
         }
 
-        // extract name (student or teacher)
+        // fallback construct if master data API threw an exception
         const me =
           lesson.st?.find(s => s.id === personId) ||
           lesson.te?.find(t => t.id === personId);
 
         if (me) {
-          firstName = me.foreName || firstName;
-          lastName = me.longName || lastName;
+          if (firstName === username && me.foreName) firstName = me.foreName;
+          if (!lastName && me.longName) lastName = me.longName;
         }
 
-        if (className !== "UNKNOWN" && firstName !== username) {
+        if (className !== "UNKNOWN" && lastName !== "") {
           break;
         }
       }
