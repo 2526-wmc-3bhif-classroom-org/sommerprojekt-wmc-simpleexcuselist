@@ -339,6 +339,56 @@ app.get('/api/absences', async (req, res) => {
   }
 });
 
+app.post('/api/excuses/submit', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'student') {
+      return res.status(403).json({ error: 'Nur Schüler können Entschuldigungen einreichen' });
+    }
+
+    const { absenceId } = req.body;
+    if (!absenceId) {
+      return res.status(400).json({ error: 'absenceId fehlt' });
+    }
+
+    const db = new Unit(false);
+    try {
+      const studentParent = db.prepare(`SELECT parentId FROM StudentParent WHERE studentUntisId = ?`).get(decoded.untisId) as any;
+
+      if (!studentParent) {
+        db.complete(false);
+        return res.status(400).json({ error: 'Diesem Schüler ist kein Elternteil zugewiesen' });
+      }
+
+      db.prepare(`
+        INSERT INTO Excuse (id, absenceId, parentId, status)
+        VALUES (?, ?, ?, 'pending')
+      `).run(crypto.randomUUID(), absenceId, studentParent.parentId);
+
+      db.prepare(`
+        UPDATE Absence
+        SET status = 'pending'
+        WHERE id = ? AND studentUntisId = ?
+      `).run(absenceId, decoded.untisId);
+
+      db.complete(true);
+      res.json({ success: true });
+    } catch (err) {
+      db.complete(false);
+      throw err;
+    }
+  } catch (error: any) {
+    console.error('Submit excuse error:', error.message);
+    res.status(500).json({ error: 'Fehler beim Einreichen der Entschuldigung' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
