@@ -105,6 +105,11 @@ const rejectExcuse = (id: number) => {
     console.log('Excuse rejected:', id);
   }
 };
+
+const logout = () => {
+  localStorage.removeItem('untis_jwt');
+  router.push('/');
+};
 </script>
 
 <template>
@@ -211,7 +216,7 @@ const rejectExcuse = (id: number) => {
       <div class="flex justify-between items-center pt-4">
         <button
           class="btn btn-ghost rounded-xl text-xs uppercase font-bold text-slate-500 border border-slate-200 bg-white"
-          @click="router.push('/')"
+          @click="logout"
         >
           Logout
         </button>
