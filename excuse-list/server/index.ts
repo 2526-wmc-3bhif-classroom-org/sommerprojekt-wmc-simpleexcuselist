@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { WebUntis } from 'webuntis';
 import crypto from 'node:crypto';
+import bcrypt from 'bcrypt';
 import {Unit} from "../data/unit";
 
 export interface Parent {
@@ -87,8 +88,8 @@ async function fetchUserClassAndNamesFallback(untis: WebUntis, personId: number,
       className = lesson.kl[0].name;
     }
 
-    const me =
-      lesson.st?.find((s: any) => s.id === personId) ||
+    const me: any =
+      lesson.su?.find((s: any) => s.id === personId) ||
       lesson.te?.find((t: any) => t.id === personId);
 
     if (me) {
@@ -116,6 +117,7 @@ function upsertStudent(db: Unit, personId: number, firstName: string, lastName: 
 }
 
 async function ensureParentAccount(db: Unit, personId: number, firstName: string, lastName: string) {
+  // @ts-ignore
   const existingParent = db.prepare(`SELECT * FROM StudentParent WHERE studentUntisId = ?`).get(personId);
   if (!existingParent) {
     let parentId = '';
@@ -123,12 +125,13 @@ async function ensureParentAccount(db: Unit, personId: number, firstName: string
     while (!isUnique) {
       const randomDigits = Math.floor(100000 + Math.random() * 900000);
       parentId = `gu${randomDigits}`;
+      // @ts-ignore
       const checkId = db.prepare(`SELECT id FROM Parent WHERE id = ?`).get(parentId);
       if (!checkId) isUnique = true;
     }
 
     const plainPassword = crypto.randomBytes(5).toString('hex');
-    const passwordHash = crypto.createHash('sha256').update(plainPassword).digest('hex');
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
 
     const randomFirstName = await fetchRandomFirstName();
     const parentName = `${randomFirstName} ${lastName}`;
@@ -188,8 +191,8 @@ app.post('/api/login', async (req, res) => {
     const parent = db.prepare(`SELECT * FROM Parent WHERE username = ?`).get(username) as any;
 
     if (parent) {
-      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-      if (parent.passwordHash === passwordHash) {
+      const isMatch = await bcrypt.compare(password, parent.passwordHash);
+      if (isMatch) {
         const token = jwt.sign(
           { parentId: parent.id, username: parent.username, role: 'parent' },
           jwtSecret,
@@ -258,7 +261,7 @@ app.post('/api/login', async (req, res) => {
           }
 
           const plainPassword = crypto.randomBytes(5).toString('hex');
-          const passwordHash = crypto.createHash('sha256').update(plainPassword).digest('hex');
+          const passwordHash = await bcrypt.hash(plainPassword, 10);
 
           const parentName = `${randomFirstName} ${lastName}`;
 
