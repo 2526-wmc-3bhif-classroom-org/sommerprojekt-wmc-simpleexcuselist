@@ -6,6 +6,20 @@ import { WebUntis } from 'webuntis';
 import crypto from 'node:crypto';
 import {Unit} from "../data/unit";
 
+export interface Parent {
+  id: string;
+  username: string;
+  passwordHash: string;
+  name: string;
+  createdAt?: string;
+}
+
+export async function fetchRandomFirstName(): Promise<string> {
+  const res = await fetch('https://randomuser.me/api/?inc=name');
+  const data = await res.json();
+  return data.results[0].name.first;
+}
+
 dotenv.config();
 
 const app = express();
