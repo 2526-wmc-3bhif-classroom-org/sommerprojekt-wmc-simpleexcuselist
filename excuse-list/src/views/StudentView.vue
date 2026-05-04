@@ -80,8 +80,8 @@ const logout = () => {
   router.push('/');
 };
 
-const signExcuse = (id: number) => {
-  console.log('Signing excuse for id:', id);
+const submitExcuse = (id: string) => {
+  console.log('Submitting excuse for id:', id);
 };
 </script>
 
@@ -169,9 +169,9 @@ const signExcuse = (id: number) => {
               <td class="text-center px-10">
                 <button
                   class="btn btn-sm rounded-xl btn-primary text-white font-bold uppercase text-[11px] tracking-widest"
-                  @click="signExcuse(absence.id)"
+                  @click="submitExcuse(absence.id)"
                 >
-                  Sign/Excuse
+                  Einreichen
                 </button>
               </td>
             </tr>
