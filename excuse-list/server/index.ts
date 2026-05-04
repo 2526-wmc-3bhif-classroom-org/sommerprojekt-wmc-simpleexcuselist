@@ -47,6 +47,141 @@ async function withUntis<T>(
 app.use(cors());
 app.use(express.json());
 
+async function fetchUserDetails(untis: WebUntis, personType: number, personId: number, username: string) {
+  let firstName = username;
+  let lastName = '';
+  try {
+    if (personType === 5) {
+      const students = await untis.getStudents();
+      const me = students.find((s: any) => s.id === personId);
+      if (me) {
+        firstName = me.foreName || firstName;
+        lastName = me.longName || lastName;
+      }
+    } else if (personType === 2) {
+      const teachers = await untis.getTeachers();
+      const me = teachers.find((t: any) => t.id === personId);
+      if (me) {
+        firstName = me.foreName || firstName;
+        lastName = me.longName || lastName;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch user master data:', err);
+  }
+  return { firstName, lastName };
+}
+
+async function fetchUserClassAndNamesFallback(untis: WebUntis, personId: number, currentFirstName: string, currentLastName: string, username: string) {
+  let className = 'UNKNOWN';
+  let firstName = currentFirstName;
+  let lastName = currentLastName;
+  const start = new Date();
+  const end = new Date();
+  end.setDate(end.getDate() + 7);
+
+  const timetable = await untis.getOwnTimetableForRange(start, end);
+
+  for (const lesson of timetable) {
+    if (lesson.kl && lesson.kl.length > 0) {
+      className = lesson.kl[0].name;
+    }
+
+    const me =
+      lesson.st?.find((s: any) => s.id === personId) ||
+      lesson.te?.find((t: any) => t.id === personId);
+
+    if (me) {
+      if (firstName === username && me.foreName) firstName = me.foreName;
+      if (!lastName && me.longName) lastName = me.longName;
+    }
+
+    if (className !== 'UNKNOWN' && lastName !== '') {
+      break;
+    }
+  }
+  return { className, firstName, lastName };
+}
+
+function upsertStudent(db: Unit, personId: number, firstName: string, lastName: string, className: string) {
+  db.prepare(`
+    INSERT INTO Student (untisId, firstName, lastName, className)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(untisId)
+    DO UPDATE SET
+      firstName = excluded.firstName,
+      lastName = excluded.lastName,
+      className = excluded.className
+  `).run(personId, firstName, lastName, className);
+}
+
+async function ensureParentAccount(db: Unit, personId: number, firstName: string, lastName: string) {
+  const existingParent = db.prepare(`SELECT * FROM StudentParent WHERE studentUntisId = ?`).get(personId);
+  if (!existingParent) {
+    let parentId = '';
+    let isUnique = false;
+    while (!isUnique) {
+      const randomDigits = Math.floor(100000 + Math.random() * 900000);
+      parentId = `gu${randomDigits}`;
+      const checkId = db.prepare(`SELECT id FROM Parent WHERE id = ?`).get(parentId);
+      if (!checkId) isUnique = true;
+    }
+
+    const plainPassword = crypto.randomBytes(5).toString('hex');
+    const passwordHash = crypto.createHash('sha256').update(plainPassword).digest('hex');
+
+    const randomFirstName = await fetchRandomFirstName();
+    const parentName = `${randomFirstName} ${lastName}`;
+
+    db.prepare(`
+      INSERT INTO Parent (id, username, passwordHash, name)
+      VALUES (?, ?, ?, ?)
+    `).run(parentId, parentId, passwordHash, parentName);
+
+    db.prepare(`
+      INSERT INTO StudentParent (parentId, studentUntisId)
+      VALUES (?, ?)
+    `).run(parentId, personId);
+
+    console.log(`\n==============================================`);
+    console.log(`New Parent Account Created for Student: ${firstName} ${lastName}`);
+    console.log(`Username / ID: ${parentId}`);
+    console.log(`Password: ${plainPassword}`);
+    console.log(`==============================================\n`);
+  }
+}
+
+async function syncAndGetAbsences(db: Unit, untis: WebUntis, personId: number) {
+  const startDate = new Date('2025-09-01');
+  const endDate = new Date();
+
+  let absences: any[] = [];
+  try {
+    const result = await untis.getAbsentLesson(startDate, endDate);
+    absences = Array.isArray(result) ? result : (result?.absences || []);
+  } catch (e) {
+    console.warn('Could not fetch absences:', e);
+  }
+
+  const stmt = db.prepare(`
+    INSERT INTO Absence (id, untisId, studentUntisId, date, startTime, endTime, status)
+    VALUES (?, ?, ?, ?, ?, ?, 'open')
+    ON CONFLICT(untisId) DO NOTHING
+  `);
+
+  for (const a of absences) {
+    stmt.run(
+      crypto.randomUUID(),
+      a.id,
+      personId,
+      a.startDate || a.date,
+      a.startTime || 0,
+      a.endTime || 0
+    );
+  }
+  return absences;
+}
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -62,154 +197,28 @@ app.post('/api/login', async (req, res) => {
       const personId = session.personId;
       const personType = session.personType; // 5 = Student, 2 = Teacher
 
-      let firstName = username;
-      let lastName = "";
-      let className = "UNKNOWN";
-
-      // 1.5 fetch precise names from master data using WebUntis config
-      try {
-        if (personType === 5) {
-          const students = await untis.getStudents();
-          const me = students.find((s: any) => s.id === personId);
-          if (me) {
-            firstName = me.foreName || firstName;
-            lastName = me.longName || lastName;
-          }
-        } else if (personType === 2) {
-          const teachers = await untis.getTeachers();
-          const me = teachers.find((t: any) => t.id === personId);
-          if (me) {
-            firstName = me.foreName || firstName;
-            lastName = me.longName || lastName;
-          }
-        }
-      } catch (err) {
-        console.warn("Could not fetch user master data:", err);
-      }
-
-      // 2. fetch timetable (for class name & fallback for name)
-      const start = new Date();
-      const end = new Date();
-      end.setDate(end.getDate() + 7);
-
-      const timetable = await untis.getOwnTimetableForRange(start, end);
-
-      for (const lesson of timetable) {
-
-        // extract class
-        if (lesson.kl && lesson.kl.length > 0) {
-          className = lesson.kl[0].name;
-        }
-
-        // fallback construct if master data API threw an exception
-        const me =
-          lesson.st?.find(s => s.id === personId) ||
-          lesson.te?.find(t => t.id === personId);
-
-        if (me) {
-          if (firstName === username && me.foreName) firstName = me.foreName;
-          if (!lastName && me.longName) lastName = me.longName;
-        }
-
-        if (className !== "UNKNOWN" && lastName !== "") {
-          break;
-        }
-      }
-      const db = new Unit(false);
-      try {
-        // 3. UPSERT student
-        db.prepare(`
-        INSERT INTO Student (untisId, firstName, lastName, className)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(untisId)
-        DO UPDATE SET
-          firstName = excluded.firstName,
-          lastName = excluded.lastName,
-          className = excluded.className
-      `).run(
-        personId,
-        firstName,
-        lastName,
-        className
+      // Fetch user details
+      const initialDetails = await fetchUserDetails(untis, personType, personId, username);
+      const { className, firstName, lastName } = await fetchUserClassAndNamesFallback(
+        untis, personId, initialDetails.firstName, initialDetails.lastName, username
       );
 
-       const existingParent = db.prepare(`SELECT * FROM StudentParent WHERE studentUntisId = ?`).get(personId);
-       if (!existingParent) {
-         let parentId = '';
-         let isUnique = false;
-         while (!isUnique) {
-           const randomDigits = Math.floor(100000 + Math.random() * 900000);
-           parentId = `gu${randomDigits}`;
-           const checkId = db.prepare(`SELECT id FROM Parent WHERE id = ?`).get(parentId);
-           if (!checkId) isUnique = true;
-         }
+      const db = new Unit(false);
+      let absences: any[] = [];
+      try {
+        upsertStudent(db, personId, firstName, lastName, className);
+        await ensureParentAccount(db, personId, firstName, lastName);
+        absences = await syncAndGetAbsences(db, untis, personId);
 
-         const plainPassword = crypto.randomBytes(5).toString('hex');
-         const passwordHash = crypto.createHash('sha256').update(plainPassword).digest('hex');
+        // JWT
+        const token = jwt.sign(
+          { untisId: personId, username, role: "student" },
+          jwtSecret,
+          { expiresIn: '1h' }
+        );
 
-         const randomFirstName = await fetchRandomFirstName();
-         const parentName = `${randomFirstName} ${lastName}`;
-
-         db.prepare(`
-           INSERT INTO Parent (id, username, passwordHash, name)
-           VALUES (?, ?, ?, ?)
-         `).run(parentId, parentId, passwordHash, parentName);
-
-         db.prepare(`
-           INSERT INTO StudentParent (parentId, studentUntisId)
-           VALUES (?, ?)
-         `).run(parentId, personId);
-
-         console.log(`\n==============================================`);
-         console.log(`New Parent Account Created for Student: ${firstName} ${lastName}`);
-         console.log(`Username / ID: ${parentId}`);
-         console.log(`Password: ${plainPassword}`);
-         console.log(`==============================================\n`);
-       }
-
-       // 4. fetch absences
-       const startDate = new Date('2025-09-01');
-       const endDate = new Date();
-
-       let absences: any[] = [];
-       try {
-         const result = await untis.getAbsentLesson(startDate, endDate);
-         absences = Array.isArray(result) ? result : (result?.absences || []);
-       } catch (e) {
-         console.warn('Could not fetch absences:', e);
-       }
-
-       // 5. store absences
-       const stmt = db.prepare(`
-         INSERT INTO Absence (id, untisId, studentUntisId, date, startTime, endTime, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'open')
-         ON CONFLICT(untisId) DO NOTHING
-       `);
-
-       for (const a of absences) {
-         stmt.run(
-           crypto.randomUUID(),
-           a.id,
-           personId,
-           a.startDate || a.date,
-           a.startTime || 0,
-           a.endTime || 0
-         );
-       }
-
-       // 6. JWT (FIXED — no password!)
-       const token = jwt.sign(
-         {
-           untisId: personId,
-           username,
-           role: "student"
-         },
-         jwtSecret,
-         { expiresIn: '1h' }
-       );
-
-       db.complete(true); // Commit the transaction
-       return { token, absences };
+        db.complete(true); // Commit the transaction
+        return { token, absences };
 
       } catch (err) {
         db.complete(false); // Rollback on error
