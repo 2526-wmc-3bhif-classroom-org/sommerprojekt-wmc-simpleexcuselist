@@ -151,18 +151,7 @@ async function ensureParentAccount(db: Unit, personId: number, firstName: string
   }
 }
 
-async function syncAndGetAbsences(db: Unit, untis: WebUntis, personId: number) {
-  const startDate = new Date('2025-09-01');
-  const endDate = new Date();
-
-  let absences: any[] = [];
-  try {
-    const result = await untis.getAbsentLesson(startDate, endDate);
-    absences = Array.isArray(result) ? result : (result?.absences || []);
-  } catch (e) {
-    console.warn('Could not fetch absences:', e);
-  }
-
+async function syncAndGetAbsences(db: Unit, absences: any[], personId: number) {
   const stmt = db.prepare(`
     INSERT INTO Absence (id, untisId, studentUntisId, date, startTime, endTime, isExcusedUntis, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'open')
@@ -194,6 +183,28 @@ app.post('/api/login', async (req, res) => {
   }
 
   try {
+    // 1. Check if it's a parent login
+    const db = new Unit(true);
+    const parent = db.prepare(`SELECT * FROM Parent WHERE username = ?`).get(username) as any;
+
+    if (parent) {
+      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+      if (parent.passwordHash === passwordHash) {
+        const token = jwt.sign(
+          { parentId: parent.id, username: parent.username, role: 'parent' },
+          jwtSecret,
+          { expiresIn: '1h' }
+        );
+        db.complete(null);
+        return res.json({ token, role: 'parent' });
+      } else {
+        db.complete(null);
+        return res.status(401).json({ error: 'Invalid parent credentials' });
+      }
+    }
+    db.complete(null);
+
+    // 2. Proceed with WebUntis login
     const result = await withUntis(username, password, async (untis) => {
 
       // 1. get session (only gives ID)
@@ -207,12 +218,68 @@ app.post('/api/login', async (req, res) => {
         untis, personId, initialDetails.firstName, initialDetails.lastName, username
       );
 
+      // Perform network requests BEFORE opening the database transaction
+      let untisAbsences: any[] = [];
+      try {
+        const startDate = new Date('2025-09-01');
+        const endDate = new Date();
+        const result = await untis.getAbsentLesson(startDate, endDate);
+        untisAbsences = Array.isArray(result) ? result : (result?.absences || []);
+      } catch (e) {
+        console.warn('Could not fetch absences:', e);
+      }
+
+      let existingParentFlag = false;
+      {
+        const readDb = new Unit(true);
+        existingParentFlag = !!readDb.prepare(`SELECT parentId FROM StudentParent WHERE studentUntisId = ?`).get(personId);
+        readDb.complete(null);
+      }
+
+      let randomFirstName = '';
+      if (!existingParentFlag) {
+         randomFirstName = await fetchRandomFirstName();
+      }
+
       const db = new Unit(false);
       let absences: any[] = [];
       try {
         upsertStudent(db, personId, firstName, lastName, className);
-        await ensureParentAccount(db, personId, firstName, lastName);
-        absences = await syncAndGetAbsences(db, untis, personId);
+
+        // Inline ensureParentAccount logic to use pre-fetched random name
+        if (!existingParentFlag) {
+          let parentId = '';
+          let isUnique = false;
+          while (!isUnique) {
+            const randomDigits = Math.floor(100000 + Math.random() * 900000);
+            parentId = `gu${randomDigits}`;
+            const checkId = db.prepare(`SELECT id FROM Parent WHERE id = ?`).get(parentId);
+            if (!checkId) isUnique = true;
+          }
+
+          const plainPassword = crypto.randomBytes(5).toString('hex');
+          const passwordHash = crypto.createHash('sha256').update(plainPassword).digest('hex');
+
+          const parentName = `${randomFirstName} ${lastName}`;
+
+          db.prepare(`
+            INSERT INTO Parent (id, username, passwordHash, name)
+            VALUES (?, ?, ?, ?)
+          `).run(parentId, parentId, passwordHash, parentName);
+
+          db.prepare(`
+            INSERT INTO StudentParent (parentId, studentUntisId)
+            VALUES (?, ?)
+          `).run(parentId, personId);
+
+          console.log(`\n==============================================`);
+          console.log(`New Parent Account Created for Student: ${firstName} ${lastName}`);
+          console.log(`Username / ID: ${parentId}`);
+          console.log(`Password: ${plainPassword}`);
+          console.log(`==============================================\n`);
+        }
+
+        absences = await syncAndGetAbsences(db, untisAbsences, personId);
 
         // JWT
         const token = jwt.sign(
@@ -222,7 +289,7 @@ app.post('/api/login', async (req, res) => {
         );
 
         db.complete(true); // Commit the transaction
-        return { token, absences };
+        return { token, role: "student", absences };
 
       } catch (err) {
         db.complete(false); // Rollback on error

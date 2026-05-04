@@ -28,7 +28,11 @@ const login = async () => {
     const data = await response.json();
     localStorage.setItem('untis_jwt', data.token);
 
-    router.push('/student');
+    if (data.role === 'parent') {
+      router.push('/parent');
+    } else {
+      router.push('/student');
+    }
   } catch (err: any) {
     error.value = err.message || 'Login failed';
   }
