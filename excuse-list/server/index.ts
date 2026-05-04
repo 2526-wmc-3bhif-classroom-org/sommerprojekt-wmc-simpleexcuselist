@@ -111,6 +111,39 @@ app.post('/api/login', async (req, res) => {
         className
       );
 
+       const existingParent = db.prepare(`SELECT * FROM StudentParent WHERE studentUntisId = ?`).get(personId);
+       if (!existingParent) {
+         let parentId = '';
+         let isUnique = false;
+         while (!isUnique) {
+           const randomDigits = Math.floor(100000 + Math.random() * 900000);
+           parentId = `gu${randomDigits}`;
+           const checkId = db.prepare(`SELECT id FROM Parent WHERE id = ?`).get(parentId);
+           if (!checkId) isUnique = true;
+         }
+
+         const plainPassword = crypto.randomBytes(5).toString('hex');
+         const passwordHash = crypto.createHash('sha256').update(plainPassword).digest('hex');
+
+         const randomFirstName = await fetchRandomFirstName();
+         const parentName = `${randomFirstName} ${lastName}`;
+
+         db.prepare(`
+           INSERT INTO Parent (id, username, passwordHash, name)
+           VALUES (?, ?, ?, ?)
+         `).run(parentId, parentId, passwordHash, parentName);
+
+         db.prepare(`
+           INSERT INTO StudentParent (parentId, studentUntisId)
+           VALUES (?, ?)
+         `).run(parentId, personId);
+
+         console.log(`\n==============================================`);
+         console.log(`New Parent Account Created for Student: ${firstName} ${lastName}`);
+         console.log(`Username / ID: ${parentId}`);
+         console.log(`Password: ${plainPassword}`);
+         console.log(`==============================================\n`);
+       }
 
        // 4. fetch absences
        const startDate = new Date('2025-09-01');
