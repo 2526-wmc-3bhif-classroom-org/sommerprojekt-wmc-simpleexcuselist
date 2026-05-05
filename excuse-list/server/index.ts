@@ -431,6 +431,47 @@ app.get('/api/parent/excuses', async (req, res) => {
   }
 });
 
+app.post('/api/parent/excuses/:excuseId/sign', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'parent') {
+      return res.status(403).json({ error: 'Forbidden: Parent role required' });
+    }
+
+    const { excuseId } = req.params;
+    const db = new Unit(false);
+
+    try {
+      const excuse = db.prepare(`SELECT absenceId FROM Excuse WHERE id = ? AND parentId = ?`).get(excuseId, decoded.parentId) as any;
+      if (!excuse) {
+        db.complete(false);
+        return res.status(404).json({ error: 'Excuse not found or not owned by this parent' });
+      }
+
+      // Update Excuse status
+      db.prepare(`UPDATE Excuse SET status = 'signed' WHERE id = ?`).run(excuseId);
+
+      // Temporary step requested by user: Delete the associated absence
+      db.prepare(`DELETE FROM Absence WHERE id = ?`).run(excuse.absenceId);
+
+      db.complete(true);
+      res.json({ success: true });
+    } catch (err) {
+      db.complete(false);
+      throw err;
+    }
+  } catch (error: any) {
+    console.error('Error signing excuse:', error.message);
+    res.status(500).json({ error: 'Error signing excuse' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
