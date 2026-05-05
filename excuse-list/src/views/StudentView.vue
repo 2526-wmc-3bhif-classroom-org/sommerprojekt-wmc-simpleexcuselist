@@ -80,8 +80,31 @@ const logout = () => {
   router.push('/');
 };
 
-const submitExcuse = (id: string) => {
+const submitExcuse = async (id: string) => {
   console.log('Submitting excuse for id:', id);
+  const token = localStorage.getItem('untis_jwt');
+  if (!token) {
+    router.push('/');
+  }
+  const submit = await fetch(`/api/excuses/submit`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      absenceId: id,
+    })
+  });
+
+  if(!submit.ok) {
+    const err = await submit.json().catch(() => ({}));
+    console.error('Failed to submit excuse:', err);
+    alert('Fehler beim Einreichen: ' + (err.error || 'Unbekannter Fehler'));
+  }
+  else {
+    await fetchAbsences();
+  }
 };
 </script>
 
