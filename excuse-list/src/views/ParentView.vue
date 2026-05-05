@@ -1,52 +1,60 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 interface Excuse {
-  id: number;
-  studentName: string;
-  startDate: number;
+  excuseId: string;
+  excuseStatus: string;
+  absenceId: string;
+  date: number;
   startTime: number;
   endTime: number;
-  reason: string;
-  status: 'pending' | 'signed' | 'rejected';
-  excuseStatus: string | null;
+  studentFirstName: string;
+  studentLastName: string;
 }
 
-const excuses = ref<Excuse[]>([
-  {
-    id: 1,
-    studentName: 'Max Mustermann',
-    startDate: 20260403,
-    startTime: 800,
-    endTime: 1000,
-    reason: 'Zahnarzt',
-    status: 'pending',
-    excuseStatus: null,
-  },
-  {
-    id: 2,
-    studentName: 'Max Mustermann',
-    startDate: 20260404,
-    startTime: 1000,
-    endTime: 1200,
-    reason: 'Krank',
-    status: 'signed',
-    excuseStatus: 'accepted',
-  },
-  {
-    id: 3,
-    studentName: 'Max Mustermann',
-    startDate: 20260405,
-    startTime: 1400,
-    endTime: 1600,
-    reason: 'Schulausflug',
-    status: 'pending',
-    excuseStatus: null,
-  },
-]);
-
+const excuses = ref<Excuse[]>([]);
+const loading = ref(true);
+const error = ref('');
 const router = useRouter();
+
+const fetchExcuses = async () => {
+  const token = localStorage.getItem('untis_jwt');
+  if (!token) {
+    router.push('/');
+    return;
+  }
+  loading.value = true;
+  error.value = '';
+
+  try {
+    const res = await fetch('/api/parent/excuses', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem('untis_jwt');
+        router.push('/');
+        return;
+      }
+      throw new Error(`Fehler beim Laden (${res.status})`);
+    }
+
+    const data = await res.json();
+    excuses.value = data;
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Einträge';
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchExcuses();
+});
 
 const formatDate = (dateNum: number) => {
   if (!dateNum) return 'N/A';
@@ -90,20 +98,35 @@ const getStatusText = (status: string) => {
   }
 };
 
-const signExcuse = (id: number) => {
-  const excuse = excuses.value.find(e => e.id === id);
-  if (excuse) {
-    excuse.status = 'signed';
-    console.log('Excuse signed:', id);
+const signExcuse = async (excuseId: string) => {
+  const token = localStorage.getItem('untis_jwt');
+  if (!token) {
+    router.push('/');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/parent/excuses/${excuseId}/sign`, {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         Authorization: `Bearer ${token}`
+       }
+    });
+
+    if(!res.ok) throw new Error('Fehler beim Unterzeichnen');
+
+    // Remove locally
+    excuses.value = excuses.value.filter(e => e.excuseId !== excuseId);
+  } catch(e) {
+     console.error(e);
+     alert('Konnte nicht unterzeichnet werden.');
   }
 };
 
-const rejectExcuse = (id: number) => {
-  const excuse = excuses.value.find(e => e.id === id);
-  if (excuse) {
-    excuse.status = 'rejected';
-    console.log('Excuse rejected:', id);
-  }
+const rejectExcuse = async (excuseId: string) => {
+  // Temporary just hide it locally
+  excuses.value = excuses.value.filter(e => e.excuseId !== excuseId);
 };
 
 const logout = () => {
@@ -126,14 +149,31 @@ const logout = () => {
           >Ausstehend</span
         >
         <span class="text-2xl font-black text-orange-600">{{
-          excuses.filter(e => e.status === 'pending').length
+          excuses.length
         }}</span>
       </div>
     </div>
 
     <div class="max-w-[1600px] mx-auto space-y-6">
+      <div v-if="loading" class="flex justify-center py-16">
+        <span class="loading loading-spinner loading-lg text-orange-600"></span>
+      </div>
+
       <div
-        v-if="excuses.length === 0"
+        v-else-if="error"
+        class="bg-white border border-red-100 text-red-600 rounded-3xl shadow-sm px-8 py-6 flex items-center gap-3"
+      >
+        <div class="h-2 w-2 rounded-full bg-red-500"></div>
+        <div>
+          <p class="font-bold text-sm uppercase tracking-widest">
+            Fehler beim Laden
+          </p>
+          <p class="text-sm">{{ error }}</p>
+        </div>
+      </div>
+
+      <div
+        v-else-if="excuses.length === 0"
         class="bg-white border border-emerald-100 rounded-3xl shadow-sm px-8 py-10 text-center"
       >
         <h2 class="text-xl font-black text-emerald-600 mb-2">
@@ -156,25 +196,23 @@ const logout = () => {
               <th>Datum</th>
               <th>Von</th>
               <th>Bis</th>
-              <th>Grund</th>
-              <th class="text-center">Status</th>
               <th class="text-center px-10">Aktion</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="(excuse, index) in excuses"
-              :key="excuse.id"
+              :key="excuse.excuseId"
               class="hover:bg-blue-50/20 transition-colors border-b border-slate-50 last:border-0"
             >
               <td class="py-4 px-10 font-bold text-slate-700">
                 {{ index + 1 }}
               </td>
               <td class="text-slate-700 text-sm font-semibold">
-                {{ excuse.studentName }}
+                {{ excuse.studentFirstName }} {{ excuse.studentLastName }}
               </td>
               <td class="text-slate-500 text-sm">
-                {{ formatDate(excuse.startDate) }}
+                {{ formatDate(excuse.date) }}
               </td>
               <td class="text-slate-500 text-sm">
                 {{ formatTime(excuse.startTime) }}
@@ -182,27 +220,17 @@ const logout = () => {
               <td class="text-slate-500 text-sm">
                 {{ formatTime(excuse.endTime) }}
               </td>
-              <td class="text-slate-500 text-sm">
-                {{ excuse.reason }}
-              </td>
-              <td class="text-center">
-                <span :class="getStatusBadge(excuse.status)" class="text-xs font-bold">
-                  {{ getStatusText(excuse.status) }}
-                </span>
-              </td>
               <td class="text-center px-10">
                 <div class="flex gap-2 justify-center">
                   <button
-                    v-if="excuse.status === 'pending'"
                     class="btn btn-sm rounded-xl btn-success text-white font-bold uppercase text-[11px] tracking-widest"
-                    @click="signExcuse(excuse.id)"
+                    @click="signExcuse(excuse.excuseId)"
                   >
                     Unterschreiben
                   </button>
                   <button
-                    v-if="excuse.status === 'pending'"
                     class="btn btn-sm rounded-xl btn-error text-white font-bold uppercase text-[11px] tracking-widest"
-                    @click="rejectExcuse(excuse.id)"
+                    @click="rejectExcuse(excuse.excuseId)"
                   >
                     Ablehnen
                   </button>
@@ -222,6 +250,7 @@ const logout = () => {
         </button>
         <button
           class="btn btn-primary rounded-xl text-xs uppercase font-black tracking-widest px-6"
+          @click="fetchExcuses"
         >
           Refresh
         </button>
