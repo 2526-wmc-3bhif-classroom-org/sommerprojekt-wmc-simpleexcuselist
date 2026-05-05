@@ -392,6 +392,45 @@ app.post('/api/excuses/submit', async (req, res) => {
   }
 });
 
+app.get('/api/parent/excuses', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'parent') {
+      return res.status(403).json({ error: 'Forbidden: Parent role required' });
+    }
+
+    const db = new Unit(true);
+    const excuses = db.prepare(`
+      SELECT
+        e.id as excuseId,
+        e.status as excuseStatus,
+        a.id as absenceId,
+        a.date,
+        a.startTime,
+        a.endTime,
+        s.firstName as studentFirstName,
+        s.lastName as studentLastName
+      FROM Excuse e
+      JOIN Absence a ON e.absenceId = a.id
+      JOIN Student s ON a.studentUntisId = s.untisId
+      WHERE e.parentId = ? AND e.status = 'pending'
+      ORDER BY a.date DESC
+    `).all(decoded.parentId);
+
+    db.complete(null);
+    res.json(excuses);
+  } catch (error: any) {
+    console.error('Error fetching parent excuses:', error.message);
+    res.status(500).json({ error: 'Error fetching parent excuses', details: error.message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
