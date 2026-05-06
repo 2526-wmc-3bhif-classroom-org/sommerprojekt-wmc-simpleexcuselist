@@ -18,6 +18,15 @@ const loading = ref(true);
 const error = ref('');
 const router = useRouter();
 
+// Signature Modal State
+const showSignatureModal = ref(false);
+const activeExcuseId = ref<string | null>(null);
+const signatureCanvas = ref<HTMLCanvasElement | null>(null);
+const isDrawing = ref(false);
+let ctx: CanvasRenderingContext2D | null = null;
+let lastX = 0;
+let lastY = 0;
+
 const fetchExcuses = async () => {
   const token = localStorage.getItem('untis_jwt');
   if (!token) {
@@ -98,6 +107,95 @@ const getStatusText = (status: string) => {
   }
 };
 
+// Canvas Drawing Logic
+const startDrawing = (e: MouseEvent | TouchEvent) => {
+  isDrawing.value = true;
+  const canvas = signatureCanvas.value;
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+
+  if (e instanceof MouseEvent) {
+    lastX = e.clientX - rect.left;
+    lastY = e.clientY - rect.top;
+  } else if (e instanceof TouchEvent) {
+    lastX = e.touches[0].clientX - rect.left;
+    lastY = e.touches[0].clientY - rect.top;
+  }
+};
+
+const draw = (e: MouseEvent | TouchEvent) => {
+  if (!isDrawing.value || !ctx) return;
+  e.preventDefault();
+  const canvas = signatureCanvas.value;
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+
+  let currentX, currentY;
+  if (e instanceof MouseEvent) {
+    currentX = e.clientX - rect.left;
+    currentY = e.clientY - rect.top;
+  } else if (e instanceof TouchEvent) {
+    currentX = e.touches[0].clientX - rect.left;
+    currentY = e.touches[0].clientY - rect.top;
+  } else {
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(currentX, currentY);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  lastX = currentX;
+  lastY = currentY;
+};
+
+const stopDrawing = () => {
+  isDrawing.value = false;
+};
+
+const initCanvas = () => {
+  if (signatureCanvas.value) {
+    ctx = signatureCanvas.value.getContext('2d');
+    // Clear canvas
+    if (ctx) {
+      ctx.clearRect(0, 0, signatureCanvas.value.width, signatureCanvas.value.height);
+    }
+  }
+};
+
+const clearSignature = () => {
+  if (ctx && signatureCanvas.value) {
+    ctx.clearRect(0, 0, signatureCanvas.value.width, signatureCanvas.value.height);
+  }
+};
+
+const openSignatureModal = (excuseId: string) => {
+  activeExcuseId.value = excuseId;
+  showSignatureModal.value = true;
+  // Initialize canvas after a short delay so DOM can render modal
+  setTimeout(() => {
+    initCanvas();
+  }, 50);
+};
+
+const closeSignatureModal = () => {
+  showSignatureModal.value = false;
+  activeExcuseId.value = null;
+};
+
+const confirmSignature = async () => {
+  if (!activeExcuseId.value) return;
+
+  // Here we could get the signature image: canvas.toDataURL()
+  // But for now, we just proceed to call the signExcuse API
+  await signExcuse(activeExcuseId.value);
+  closeSignatureModal();
+};
+
 const signExcuse = async (excuseId: string) => {
   const token = localStorage.getItem('untis_jwt');
   if (!token) {
@@ -111,7 +209,8 @@ const signExcuse = async (excuseId: string) => {
        headers: {
          'Content-Type': 'application/json',
          Authorization: `Bearer ${token}`
-       }
+       },
+       // if we wanted to pass signature: body: JSON.stringify({ signature: signatureCanvas.value?.toDataURL() })
     });
 
     if(!res.ok) throw new Error('Fehler beim Unterzeichnen');
@@ -224,7 +323,7 @@ const logout = () => {
                 <div class="flex gap-2 justify-center">
                   <button
                     class="btn btn-sm rounded-xl btn-success text-white font-bold uppercase text-[11px] tracking-widest"
-                    @click="signExcuse(excuse.excuseId)"
+                    @click="openSignatureModal(excuse.excuseId)"
                   >
                     Unterschreiben
                   </button>
@@ -256,6 +355,50 @@ const logout = () => {
         </button>
       </div>
     </div>
+
+    <!-- Signature Modal -->
+    <div v-if="showSignatureModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div class="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-lg">
+        <h3 class="text-xl font-black text-slate-900 uppercase tracking-tighter mb-4">
+          Bitte Unterschreiben
+        </h3>
+        <p class="text-slate-500 mb-4 text-sm">
+          Zeichnen Sie Ihre Unterschrift in das untenstehende Feld, um diese Entschuldigung zu bestätigen.
+        </p>
+
+        <div class="border-2 border-slate-200 border-dashed rounded-xl bg-slate-50 mb-4 overflow-hidden touch-none relative">
+          <canvas
+            ref="signatureCanvas"
+            width="450"
+            height="200"
+            class="w-full h-full cursor-crosshair"
+            @mousedown="startDrawing"
+            @mousemove="draw"
+            @mouseup="stopDrawing"
+            @mouseleave="stopDrawing"
+            @touchstart="startDrawing"
+            @touchmove="draw"
+            @touchend="stopDrawing"
+          ></canvas>
+        </div>
+
+        <div class="flex justify-between items-center gap-3 mt-6">
+          <button class="btn btn-ghost text-slate-500 text-xs uppercase font-bold rounded-xl" @click="clearSignature">
+            Zurücksetzen
+          </button>
+
+          <div class="flex gap-2">
+            <button class="btn btn-outline border-slate-200 text-slate-500 rounded-xl uppercase text-xs font-bold" @click="closeSignatureModal">
+              Abbrechen
+            </button>
+            <button class="btn btn-success text-white rounded-xl uppercase text-xs font-bold" @click="confirmSignature">
+              Bestätigen
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- End Signature Modal -->
   </div>
 </template>
 
