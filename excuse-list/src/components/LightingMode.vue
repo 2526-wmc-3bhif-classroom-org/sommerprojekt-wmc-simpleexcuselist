@@ -1,25 +1,30 @@
 <script setup>
-import { onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
+
+const isLightMode = ref(true);
 
 const toggleTheme = (e) => {
   if (!e.target.checked) {
     document.documentElement.setAttribute('data-theme', 'dark');
     localStorage.setItem('theme', 'dark');
+    isLightMode.value = false;
   } else {
     document.documentElement.setAttribute('data-theme', 'light');
     localStorage.setItem('theme', 'light');
+    isLightMode.value = true;
   }
 }
 
 onMounted(() => {
   const savedTheme = localStorage.getItem('theme') || 'light';
+  isLightMode.value = savedTheme !== 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
 });
 </script>
 
 <template>
   <label class="swap swap-rotate">
-    <input type="checkbox" @change="toggleTheme" :checked="localStorage.getItem('theme') !== 'dark'" />
+    <input type="checkbox" @change="toggleTheme" :checked="isLightMode" />
 
     <!-- Sun Icon -->
     <svg
