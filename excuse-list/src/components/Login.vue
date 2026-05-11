@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import logo from '@/assets/selist.png';
+import logo from '../../pictures/selist-transparent.png';
 
 const username = ref('');
 const password = ref('');
@@ -46,7 +46,7 @@ const login = async () => {
       <!-- Logo -->
       <div class="text-center mb-8">
         <div class="inline-flex items-center justify-center mb-4">
-          <img :src="logo" alt="Excuse List Logo" class="h-20 w-auto rounded-xl object-contain drop-shadow-md" />
+          <img :src="logo" alt="Excuse List Logo" class="h-24 w-auto object-contain drop-shadow-sm" />
         </div>
         <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">
           Excuse List
