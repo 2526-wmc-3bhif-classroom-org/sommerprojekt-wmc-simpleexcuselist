@@ -109,112 +109,91 @@ const submitExcuse = async (id: string) => {
 </script>
 
 <template>
-  <div class="p-6 bg-slate-50 min-h-screen text-slate-800">
-    <div class="max-w-[1600px] mx-auto flex justify-between items-center mb-10">
-      <div>
-        <h1 class="text-3xl font-black text-slate-900 uppercase tracking-tighter">
-          Student Dashboard
-        </h1>
-        <p class="text-slate-500 text-sm italic">Offene Fehlstunden</p>
-      </div>
-      <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-200 text-right">
-        <span class="text-slate-400 text-[10px] font-black uppercase block tracking-widest"
-          >Offen</span
-        >
-        <span class="text-2xl font-black text-blue-600">{{
-          absences.length
-        }}</span>
-      </div>
-    </div>
-
-    <div class="max-w-[1600px] mx-auto space-y-6">
-      <div v-if="loading" class="flex justify-center py-16">
-        <span class="loading loading-spinner loading-lg text-blue-600"></span>
-      </div>
-
-      <div
-        v-else-if="error"
-        class="bg-white border border-red-100 text-red-600 rounded-3xl shadow-sm px-8 py-6 flex items-center gap-3"
-      >
-        <div class="h-2 w-2 rounded-full bg-red-500"></div>
+  <div class="min-h-screen px-6 py-8">
+    <div class="max-w-4xl mx-auto">
+      <!-- Header -->
+      <div class="mb-8 flex justify-between items-start">
         <div>
-          <p class="font-bold text-sm uppercase tracking-widest">
-            Fehler beim Laden
-          </p>
-          <p class="text-sm">{{ error }}</p>
+          <h1 class="text-4xl font-black text-gray-900 uppercase tracking-tight">
+            Meine Fehlstunden
+          </h1>
+          <p class="text-gray-500 text-sm mt-2">Unentschuldigte Absenzen</p>
+        </div>
+        <div class="text-right bg-white rounded-xl px-6 py-4 shadow-sm border border-gray-200">
+          <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Offen</div>
+          <div class="text-3xl font-black text-blue-600">{{ absences.length }}</div>
         </div>
       </div>
 
-      <div
-        v-else-if="absences.length === 0"
-        class="bg-white border border-emerald-100 rounded-3xl shadow-sm px-8 py-10 text-center"
-      >
-        <h2 class="text-xl font-black text-emerald-600 mb-2">
-          Keine unentschuldigten Fehlstunden
-        </h2>
-        <p class="text-slate-500">
-          Alles in Ordnung – es liegen aktuell keine offenen Fehlstunden vor.
-        </p>
-      </div>
+      <!-- Content -->
+      <div class="space-y-6">
+        <!-- Loading -->
+        <div v-if="loading" class="flex justify-center py-16">
+          <div class="text-center">
+            <div class="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-500">Wird geladen...</p>
+          </div>
+        </div>
 
-      <div
-        v-else
-        class="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden"
-      >
-        <table class="table w-full">
-          <thead class="bg-slate-50/50">
-            <tr class="text-slate-400 uppercase text-[11px] tracking-widest border-b border-slate-100">
-              <th class="py-5 px-10">#</th>
-              <th>Datum</th>
-              <th>Von</th>
-              <th>Bis</th>
-              <th class="text-center px-10">Aktion</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(absence, index) in absences"
-              :key="absence.id"
-              class="hover:bg-blue-50/20 transition-colors border-b border-slate-50 last:border-0"
-            >
-              <td class="py-4 px-10 font-bold text-slate-700">
-                {{ index + 1 }}
-              </td>
-              <td class="text-slate-500 text-sm">
-                {{ formatDate(absence.date) }}
-              </td>
-              <td class="text-slate-500 text-sm">
-                {{ formatTime(absence.startTime) }}
-              </td>
-              <td class="text-slate-500 text-sm">
-                {{ formatTime(absence.endTime) }}
-              </td>
-              <td class="text-center px-10">
-                <button
-                  class="btn btn-sm rounded-xl btn-primary text-white font-bold uppercase text-[11px] tracking-widest"
-                  @click="submitExcuse(absence.id)"
-                >
-                  Einreichen
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <!-- Error -->
+        <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl px-6 py-4">
+          <p class="font-bold text-red-900">Fehler beim Laden</p>
+          <p class="text-sm text-red-700 mt-1">{{ error }}</p>
+        </div>
 
-      <div v-if="!loading" class="flex justify-between items-center pt-4">
-        <button
-          class="btn btn-ghost rounded-xl text-xs uppercase font-bold text-slate-500 border border-slate-200 bg-white"
-          @click="logout"
-        >
-          Logout
-        </button>
-        <button
-          class="btn btn-primary rounded-xl text-xs uppercase font-black tracking-widest px-6"
-          @click="fetchAbsences"
-        >
-          Refresh
-        </button>
+        <!-- Empty State -->
+        <div v-else-if="absences.length === 0" class="bg-white rounded-xl px-8 py-12 text-center shadow-sm border border-gray-200">
+          <div class="text-4xl mb-4">✓</div>
+          <h2 class="text-2xl font-bold text-green-600">Keine offenen Fehlstunden</h2>
+          <p class="text-gray-500 mt-2">Super! Es liegen aktuell keine unentschuldigten Fehlstunden vor.</p>
+        </div>
+
+        <!-- Table -->
+        <div v-else class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">#</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
+                <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="(absence, index) in absences" :key="absence.id" class="hover:bg-blue-50/50 transition">
+                <td class="px-6 py-4 font-bold text-gray-900">{{ index + 1 }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(absence.date) }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
+                <td class="px-6 py-4 text-center">
+                  <button
+                    @click="submitExcuse(absence.id)"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition"
+                  >
+                    Einreichen
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer Buttons -->
+        <div class="flex justify-between gap-4 pt-4">
+          <button
+            @click="logout"
+            class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-3 rounded-lg font-bold uppercase text-sm transition"
+          >
+            Logout
+          </button>
+          <button
+            @click="fetchAbsences"
+            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold uppercase text-sm transition"
+          >
+            Aktualisieren
+          </button>
+        </div>
       </div>
     </div>
   </div>

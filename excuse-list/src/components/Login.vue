@@ -40,48 +40,67 @@ const login = async () => {
 </script>
 
 <template>
-  <div class="flex items-center justify-center min-h-screen">
-    <div class="card bg-base-200 w-full max-w-md shadow-xl p-6">
-      <figure class="px-10 pt-10">
-        <img src="../../pictures/selist-transparent.png" alt="Logo" class="rounded-xl w-32" />
-      </figure>
-      <div class="card-body">
-        <h2 class="card-title justify-center mb-4">Login to WebUntis</h2>
+  <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-md">
+      <!-- Logo -->
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
+          <span class="text-white font-bold text-2xl">EL</span>
+        </div>
+        <h1 class="text-3xl font-black text-gray-900 uppercase tracking-tight">
+          Excuse List
+        </h1>
+        <p class="text-gray-500 text-sm mt-2">Benutzer-Login</p>
+      </div>
 
-        <div class="form-control">
-          <label class="label">
-            <span class="label-text">Username</span>
+      <!-- Card -->
+      <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 space-y-6">
+        <!-- Username Input -->
+        <div>
+          <label class="block text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">
+            Benutzername
           </label>
           <input
             v-model="username"
             type="text"
-            class="input input-bordered w-full"
-            placeholder="Username"
+            class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+            placeholder="z.B. if230180"
             required
           />
         </div>
 
-        <div class="form-control mt-2">
-          <label class="label">
-            <span class="label-text">Password</span>
+        <!-- Password Input -->
+        <div>
+          <label class="block text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">
+            Passwort
           </label>
           <input
             v-model="password"
             type="password"
-            class="input input-bordered w-full"
-            placeholder="Password"
+            class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+            placeholder="Passwort eingeben"
             required
             @keyup.enter="login"
           />
         </div>
 
-        <div v-if="error" class="text-error text-sm mt-2 text-center">
+        <!-- Error Message -->
+        <div v-if="error" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-600">
           {{ error }}
         </div>
 
-        <div class="form-control mt-6">
-          <button class="btn btn-primary" @click="login">Login</button>
-        </div>
+        <!-- Login Button -->
+        <button
+          @click="login"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg uppercase tracking-wide transition"
+        >
+          Anmelden
+        </button>
+
+        <!-- Footer Text -->
+        <p class="text-xs text-gray-500 text-center">
+          Verwenden Sie Ihre WebUntis-Anmeldedaten
+        </p>
       </div>
     </div>
   </div>
