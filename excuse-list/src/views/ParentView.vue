@@ -118,8 +118,11 @@ const startDrawing = (e: MouseEvent | TouchEvent) => {
     lastX = e.clientX - rect.left;
     lastY = e.clientY - rect.top;
   } else if (e instanceof TouchEvent) {
-    lastX = e.touches[0].clientX - rect.left;
-    lastY = e.touches[0].clientY - rect.top;
+    const touch = e.touches[0];
+    if (touch) {
+      lastX = touch.clientX - rect.left;
+      lastY = touch.clientY - rect.top;
+    }
   }
 };
 
@@ -135,8 +138,10 @@ const draw = (e: MouseEvent | TouchEvent) => {
     currentX = e.clientX - rect.left;
     currentY = e.clientY - rect.top;
   } else if (e instanceof TouchEvent) {
-    currentX = e.touches[0].clientX - rect.left;
-    currentY = e.touches[0].clientY - rect.top;
+    const touch = e.touches[0];
+    if (!touch) return;
+    currentX = touch.clientX - rect.left;
+    currentY = touch.clientY - rect.top;
   } else {
     return;
   }

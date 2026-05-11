@@ -4,30 +4,37 @@ import { onMounted } from 'vue';
 const toggleTheme = (e) => {
   if (!e.target.checked) {
     document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('theme', 'dark');
   } else {
     document.documentElement.setAttribute('data-theme', 'light');
+    localStorage.setItem('theme', 'light');
   }
 }
+
+onMounted(() => {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+});
 </script>
 
 <template>
-  <label class="swap swap-rotate scale-75">
-    <input type="checkbox" @change="toggleTheme" />
+  <label class="swap swap-rotate">
+    <input type="checkbox" @change="toggleTheme" :checked="localStorage.getItem('theme') !== 'dark'" />
 
+    <!-- Sun Icon -->
     <svg
-      class="swap-on h-5 w-5 fill-current"
+      class="swap-on h-5 w-5 fill-current text-gray-900"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24">
-      <path
-        d="M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z" />
+      <path d="M12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16ZM11 1H13V4H11V1ZM11 20H13V23H11V20ZM3.51472 4.92893L4.92893 3.51472L7.05025 5.63604L5.63604 7.05025L3.51472 4.92893ZM16.9497 18.364L18.364 16.9497L20.4853 19.0711L19.0711 20.4853L16.9497 18.364ZM19.0711 3.51472L20.4853 4.92893L18.364 7.05025L16.9497 5.63604L19.0711 3.51472ZM5.63604 16.9497L7.05025 18.364L4.92893 20.4853L3.51472 19.0711L5.63604 16.9497ZM23 11V13H20V11H23ZM4 11V13H1V11H4Z" />
     </svg>
 
+    <!-- Moon Icon -->
     <svg
-      class="swap-off h-5 w-5 fill-current"
+      class="swap-off h-5 w-5 fill-current text-gray-600"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24">
-      <path
-        d="M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z" />
+      <path d="M10 7C7.24 7 5 9.24 5 12C5 14.76 7.24 17 10 17C12.76 17 15 14.76 15 12C15 9.24 12.76 7 10 7ZM10 15C8.34 15 7 13.66 7 12C7 10.34 8.34 9 10 9C11.66 9 13 10.34 13 12C13 13.66 11.66 15 10 15ZM19 3H16L3.94 16.06L6 18.12L19 5V3Z" />
     </svg>
   </label>
 </template>
