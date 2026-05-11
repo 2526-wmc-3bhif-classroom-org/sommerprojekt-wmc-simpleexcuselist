@@ -2,21 +2,55 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
+* {
+  @apply transition-colors duration-200;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-gray-900;
+}
 
 #app {
-  font-weight: normal;
+  @apply min-h-screen bg-gradient-to-br from-gray-50 to-gray-100;
 }
 
-a,
-.green {
+/* Links */
+a {
+  @apply text-blue-600 hover:text-blue-700 transition-colors;
   text-decoration: none;
-  color: #69D1C5;
-  transition: 0.4s;
-  padding: 3px;
 }
 
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
+/* Buttons */
+.btn {
+  @apply rounded-lg font-semibold text-sm uppercase tracking-wide;
+}
+
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 hover:bg-gray-300 text-gray-900;
+}
+
+/* Cards */
+.card {
+  @apply rounded-2xl shadow-sm border border-gray-200;
+}
+
+/* Tables */
+table {
+  @apply w-full;
+}
+
+thead {
+  @apply bg-gray-50 border-b border-gray-200;
+}
+
+tbody tr {
+  @apply border-b border-gray-100 hover:bg-blue-50/30 transition-colors;
 }

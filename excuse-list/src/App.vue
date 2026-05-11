@@ -1,14 +1,13 @@
 <script setup>
 import Navbar from "./components/Navbar.vue"
-import Login from "./components/Login.vue"
 import { RouterView } from "vue-router"
-import LightingMode from "@/components/LightingMode.vue";
 </script>
 
 <template>
-  <Navbar />
-  <main class="p-8">
-    <RouterView />
-  </main>
+  <div class="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
+    <Navbar />
+    <main class="flex-1">
+      <RouterView />
+    </main>
+  </div>
 </template>
-
