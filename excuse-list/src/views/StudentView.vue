@@ -110,7 +110,7 @@ const submitExcuse = async (id: string) => {
 
 <template>
   <div class="min-h-screen px-6 py-8">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-[1600px] mx-auto">
       <!-- Header -->
       <div class="mb-8 flex justify-between items-start">
         <div>
