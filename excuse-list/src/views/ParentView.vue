@@ -235,143 +235,120 @@ const logout = () => {
 </script>
 
 <template>
-  <div class="p-6 bg-slate-50 min-h-screen text-slate-800">
-    <div class="max-w-[1600px] mx-auto flex justify-between items-center mb-10">
-      <div>
-        <h1 class="text-3xl font-black text-slate-900 uppercase tracking-tighter">
-          Eltern Dashboard
-        </h1>
-        <p class="text-slate-500 text-sm italic">Entschuldigungen zur Bestätigung</p>
-      </div>
-      <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-200 text-right">
-        <span class="text-slate-400 text-[10px] font-black uppercase block tracking-widest"
-          >Ausstehend</span
-        >
-        <span class="text-2xl font-black text-orange-600">{{
-          excuses.length
-        }}</span>
-      </div>
-    </div>
-
-    <div class="max-w-[1600px] mx-auto space-y-6">
-      <div v-if="loading" class="flex justify-center py-16">
-        <span class="loading loading-spinner loading-lg text-orange-600"></span>
-      </div>
-
-      <div
-        v-else-if="error"
-        class="bg-white border border-red-100 text-red-600 rounded-3xl shadow-sm px-8 py-6 flex items-center gap-3"
-      >
-        <div class="h-2 w-2 rounded-full bg-red-500"></div>
+  <div class="min-h-screen px-6 py-8">
+    <div class="max-w-4xl mx-auto">
+      <!-- Header -->
+      <div class="mb-8 flex justify-between items-start">
         <div>
-          <p class="font-bold text-sm uppercase tracking-widest">
-            Fehler beim Laden
-          </p>
-          <p class="text-sm">{{ error }}</p>
+          <h1 class="text-4xl font-black text-gray-900 uppercase tracking-tight">
+            Eltern-Dashboard
+          </h1>
+          <p class="text-gray-500 text-sm mt-2">Entschuldigungen zur Bestätigung</p>
+        </div>
+        <div class="text-right bg-white rounded-xl px-6 py-4 shadow-sm border border-gray-200">
+          <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Ausstehend</div>
+          <div class="text-3xl font-black text-orange-600">{{ excuses.length }}</div>
         </div>
       </div>
 
-      <div
-        v-else-if="excuses.length === 0"
-        class="bg-white border border-emerald-100 rounded-3xl shadow-sm px-8 py-10 text-center"
-      >
-        <h2 class="text-xl font-black text-emerald-600 mb-2">
-          Keine ausstehenden Entschuldigungen
-        </h2>
-        <p class="text-slate-500">
-          Alle Entschuldigungen wurden überprüft und unterzeichnet.
-        </p>
-      </div>
+      <!-- Content -->
+      <div class="space-y-6">
+        <!-- Loading -->
+        <div v-if="loading" class="flex justify-center py-16">
+          <div class="text-center">
+            <div class="w-12 h-12 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-500">Wird geladen...</p>
+          </div>
+        </div>
 
-      <div
-        v-else
-        class="w-full bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden"
-      >
-        <table class="table w-full">
-          <thead class="bg-slate-50/50">
-            <tr class="text-slate-400 uppercase text-[11px] tracking-widest border-b border-slate-100">
-              <th class="py-5 px-10">#</th>
-              <th>Schüler</th>
-              <th>Datum</th>
-              <th>Von</th>
-              <th>Bis</th>
-              <th class="text-center px-10">Aktion</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(excuse, index) in excuses"
-              :key="excuse.excuseId"
-              class="hover:bg-blue-50/20 transition-colors border-b border-slate-50 last:border-0"
-            >
-              <td class="py-4 px-10 font-bold text-slate-700">
-                {{ index + 1 }}
-              </td>
-              <td class="text-slate-700 text-sm font-semibold">
-                {{ excuse.studentFirstName }} {{ excuse.studentLastName }}
-              </td>
-              <td class="text-slate-500 text-sm">
-                {{ formatDate(excuse.date) }}
-              </td>
-              <td class="text-slate-500 text-sm">
-                {{ formatTime(excuse.startTime) }}
-              </td>
-              <td class="text-slate-500 text-sm">
-                {{ formatTime(excuse.endTime) }}
-              </td>
-              <td class="text-center px-10">
-                <div class="flex gap-2 justify-center">
-                  <button
-                    class="btn btn-sm rounded-xl btn-success text-white font-bold uppercase text-[11px] tracking-widest"
-                    @click="openSignatureModal(excuse.excuseId)"
-                  >
-                    Unterschreiben
-                  </button>
-                  <button
-                    class="btn btn-sm rounded-xl btn-error text-white font-bold uppercase text-[11px] tracking-widest"
-                    @click="rejectExcuse(excuse.excuseId)"
-                  >
-                    Ablehnen
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <!-- Error -->
+        <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl px-6 py-4">
+          <p class="font-bold text-red-900">Fehler beim Laden</p>
+          <p class="text-sm text-red-700 mt-1">{{ error }}</p>
+        </div>
 
-      <div class="flex justify-between items-center pt-4">
-        <button
-          class="btn btn-ghost rounded-xl text-xs uppercase font-bold text-slate-500 border border-slate-200 bg-white"
-          @click="logout"
-        >
-          Logout
-        </button>
-        <button
-          class="btn btn-primary rounded-xl text-xs uppercase font-black tracking-widest px-6"
-          @click="fetchExcuses"
-        >
-          Refresh
-        </button>
+        <!-- Empty State -->
+        <div v-else-if="excuses.length === 0" class="bg-white rounded-xl px-8 py-12 text-center shadow-sm border border-gray-200">
+          <div class="text-4xl mb-4">✓</div>
+          <h2 class="text-2xl font-bold text-green-600">Alle Entschuldigungen bearbeitet</h2>
+          <p class="text-gray-500 mt-2">Es gibt keine ausstehenden Entschuldigungen zu unterzeichnen.</p>
+        </div>
+
+        <!-- Table -->
+        <div v-else class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">#</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Schüler</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
+                <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="(excuse, index) in excuses" :key="excuse.excuseId" class="hover:bg-blue-50/50 transition">
+                <td class="px-6 py-4 font-bold text-gray-900">{{ index + 1 }}</td>
+                <td class="px-6 py-4 text-sm text-gray-900 font-semibold">{{ excuse.studentFirstName }} {{ excuse.studentLastName }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(excuse.date) }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(excuse.startTime) }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(excuse.endTime) }}</td>
+                <td class="px-6 py-4 text-center">
+                  <div class="flex gap-2 justify-center">
+                    <button
+                      @click="openSignatureModal(excuse.excuseId)"
+                      class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
+                    >
+                      Unterschreiben
+                    </button>
+                    <button
+                      @click="rejectExcuse(excuse.excuseId)"
+                      class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
+                    >
+                      Ablehnen
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer Buttons -->
+        <div class="flex justify-between gap-4 pt-4">
+          <button
+            @click="logout"
+            class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-3 rounded-lg font-bold uppercase text-sm transition"
+          >
+            Logout
+          </button>
+          <button
+            @click="fetchExcuses"
+            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold uppercase text-sm transition"
+          >
+            Aktualisieren
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Signature Modal -->
     <div v-if="showSignatureModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div class="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-lg">
-        <h3 class="text-xl font-black text-slate-900 uppercase tracking-tighter mb-4">
-          Bitte Unterschreiben
+      <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg">
+        <h3 class="text-2xl font-bold text-gray-900 uppercase tracking-tight mb-4">
+          Bitte unterschreiben
         </h3>
-        <p class="text-slate-500 mb-4 text-sm">
+        <p class="text-gray-600 mb-6 text-sm">
           Zeichnen Sie Ihre Unterschrift in das untenstehende Feld, um diese Entschuldigung zu bestätigen.
         </p>
 
-        <div class="border-2 border-slate-200 border-dashed rounded-xl bg-slate-50 mb-4 overflow-hidden touch-none relative">
+        <div class="border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 mb-6 overflow-hidden">
           <canvas
             ref="signatureCanvas"
             width="450"
             height="200"
-            class="w-full h-full cursor-crosshair"
+            class="w-full h-full cursor-crosshair block"
             @mousedown="startDrawing"
             @mousemove="draw"
             @mouseup="stopDrawing"
@@ -382,23 +359,22 @@ const logout = () => {
           ></canvas>
         </div>
 
-        <div class="flex justify-between items-center gap-3 mt-6">
-          <button class="btn btn-ghost text-slate-500 text-xs uppercase font-bold rounded-xl" @click="clearSignature">
+        <div class="flex justify-between gap-3 mb-6">
+          <button @click="clearSignature" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg text-sm font-bold transition">
             Zurücksetzen
           </button>
+        </div>
 
-          <div class="flex gap-2">
-            <button class="btn btn-outline border-slate-200 text-slate-500 rounded-xl uppercase text-xs font-bold" @click="closeSignatureModal">
-              Abbrechen
-            </button>
-            <button class="btn btn-success text-white rounded-xl uppercase text-xs font-bold" @click="confirmSignature">
-              Bestätigen
-            </button>
-          </div>
+        <div class="flex gap-3">
+          <button @click="closeSignatureModal" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-3 rounded-lg font-bold uppercase text-sm transition">
+            Abbrechen
+          </button>
+          <button @click="confirmSignature" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold uppercase text-sm transition">
+            Bestätigen
+          </button>
         </div>
       </div>
     </div>
-    <!-- End Signature Modal -->
   </div>
 </template>
 
