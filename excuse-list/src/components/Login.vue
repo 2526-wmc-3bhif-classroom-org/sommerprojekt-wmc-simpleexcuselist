@@ -74,7 +74,7 @@ const login = async () => {
           <p class="mt-3 text-base text-gray-500 font-medium" style="margin-bottom: 3.5rem;">Loggen Sie sich ein, um fortzufahren</p>
         </div>
 
-        <form class="space-y-8" @submit.prevent="login">
+        <form class="space-y-12" @submit.prevent="login">
           <!-- Username Input -->
           <div>
             <!-- EXTRA ABSTAND HIER: mb-6 statt mb-2/mb-3 -->
