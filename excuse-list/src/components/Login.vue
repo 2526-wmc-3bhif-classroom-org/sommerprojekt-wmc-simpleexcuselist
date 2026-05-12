@@ -53,31 +53,31 @@ const login = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col justify-center items-center py-20 px-4 sm:px-6 lg:px-8 animated-bg relative overflow-hidden">
+  <div class="min-h-screen flex flex-col justify-center items-center py-32 px-4 sm:px-6 lg:px-8 animated-bg relative overflow-hidden">
     
     <!-- Decorative Ambient Background Elements -->
     <div class="absolute top-0 left-1/4 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob"></div>
     <div class="absolute top-1/4 right-1/4 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-2000"></div>
     <div class="absolute -bottom-32 left-1/3 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-4000"></div>
 
-    <div class="w-full max-w-[520px] relative z-10 animate-fade-in-up">
+    <div class="w-full max-w-[600px] relative z-10 animate-fade-in-up">
       <!-- Card -->
-      <div class="bg-white/80 backdrop-blur-2xl py-16 px-10 sm:px-16 rounded-[3.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white/50">
+      <div class="bg-white/80 backdrop-blur-2xl py-24 px-12 sm:px-20 rounded-[4rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white/50">
         
         <!-- Header -->
-        <div class="flex flex-col items-center mb-16">
+        <div class="flex flex-col items-center mb-20">
           <!-- Bigger Logo with gentle hover effect -->
-          <div class="w-36 h-36 bg-gradient-to-tr from-white to-blue-50/50 rounded-[2.5rem] shadow-[inset_0_2px_10px_rgba(0,0,0,0.02),0_4px_10px_rgba(0,0,0,0.02)] flex items-center justify-center mb-10 p-4 group transition-transform duration-500 hover:scale-105">
+          <div class="w-40 h-40 bg-gradient-to-tr from-white to-blue-50/50 rounded-[3rem] shadow-[inset_0_2px_10px_rgba(0,0,0,0.02),0_4px_10px_rgba(0,0,0,0.02)] flex items-center justify-center mb-12 p-5 group transition-transform duration-500 hover:scale-105">
             <img :src="logo" alt="Excuse List" class="w-full h-full object-contain drop-shadow-sm group-hover:drop-shadow-md transition-all duration-500" />
           </div>
-          <h2 class="text-4xl font-black text-gray-900 tracking-tight text-center">Excuse List</h2>
-          <p class="mt-4 text-lg text-gray-500 font-medium">Loggen Sie sich ein, um fortzufahren</p>
+          <h2 class="text-5xl font-black text-gray-900 tracking-tight text-center">Excuse List</h2>
+          <p class="mt-6 text-xl text-gray-500 font-medium">Loggen Sie sich ein, um fortzufahren</p>
         </div>
 
-        <form class="space-y-12" @submit.prevent="login">
+        <form class="space-y-16" @submit.prevent="login">
           <!-- Username Input -->
           <div>
-            <label for="username" class="block text-sm font-bold text-gray-700 uppercase tracking-widest mb-4 ml-2">
+            <label for="username" class="block text-base font-bold text-gray-700 uppercase tracking-widest mb-6 ml-2">
               Benutzername
             </label>
             <div>
@@ -87,14 +87,14 @@ const login = async () => {
                 type="text"
                 placeholder="z.B. if230180 oder admin"
                 :disabled="loading"
-                class="block w-full rounded-2xl border-0 py-5 px-6 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200/80 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 text-lg leading-6 transition-all duration-300 bg-white/50 hover:bg-white focus:bg-white disabled:opacity-50"
+                class="block w-full rounded-[1.5rem] border-0 py-6 px-8 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200/80 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 text-xl leading-6 transition-all duration-300 bg-white/50 hover:bg-white focus:bg-white disabled:opacity-50"
               />
             </div>
           </div>
 
           <!-- Password Input -->
           <div>
-            <label for="password" class="block text-sm font-bold text-gray-700 uppercase tracking-widest mb-4 ml-2">
+            <label for="password" class="block text-base font-bold text-gray-700 uppercase tracking-widest mb-6 ml-2">
               Passwort
             </label>
             <div>
@@ -104,33 +104,33 @@ const login = async () => {
                 type="password"
                 placeholder="••••••••"
                 :disabled="loading"
-                class="block w-full rounded-2xl border-0 py-5 px-6 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200/80 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 text-lg leading-6 transition-all duration-300 bg-white/50 hover:bg-white focus:bg-white disabled:opacity-50"
+                class="block w-full rounded-[1.5rem] border-0 py-6 px-8 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200/80 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 text-xl leading-6 transition-all duration-300 bg-white/50 hover:bg-white focus:bg-white disabled:opacity-50"
               />
             </div>
           </div>
 
           <!-- Error Message -->
-          <div v-if="error" class="rounded-2xl bg-red-50 p-5 border border-red-100 animate-shake mt-12">
+          <div v-if="error" class="rounded-[1.5rem] bg-red-50 p-6 border border-red-100 animate-shake mt-16">
             <div class="flex items-center">
               <div class="flex-shrink-0">
-                <svg class="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <svg class="h-8 w-8 text-red-500" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
                 </svg>
               </div>
-              <div class="ml-4">
-                <p class="text-base font-semibold text-red-800">{{ error }}</p>
+              <div class="ml-5">
+                <p class="text-lg font-semibold text-red-800">{{ error }}</p>
               </div>
             </div>
           </div>
 
           <!-- Submit Button -->
-          <div class="pt-6">
+          <div class="pt-10">
             <button
               type="submit"
               :disabled="loading"
-              class="flex w-full justify-center items-center rounded-2xl bg-blue-600 px-4 py-5 text-lg font-bold text-white shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:bg-blue-500 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              class="flex w-full justify-center items-center rounded-[1.5rem] bg-blue-600 px-6 py-6 text-xl font-bold text-white shadow-xl shadow-blue-600/30 hover:shadow-blue-600/50 hover:bg-blue-500 hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
             >
-              <svg v-if="loading" class="animate-spin -ml-1 mr-3 h-6 w-6 text-white" fill="none" viewBox="0 0 24 24">
+              <svg v-if="loading" class="animate-spin -ml-1 mr-4 h-7 w-7 text-white" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
@@ -142,7 +142,7 @@ const login = async () => {
       </div>
       
       <!-- Footer -->
-      <p class="text-center text-base font-medium text-gray-500/80 mt-16 mb-8">
+      <p class="text-center text-lg font-bold text-gray-500/80 mt-24 mb-10">
         Sichere Anmeldung mit Ihren WebUntis-Daten
       </p>
     </div>
