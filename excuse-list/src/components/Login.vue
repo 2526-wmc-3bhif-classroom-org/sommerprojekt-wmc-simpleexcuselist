@@ -53,76 +53,82 @@ const login = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50/50">
+  <div class="min-h-screen flex flex-col justify-center items-center py-16 px-4 sm:px-6 lg:px-8 animated-bg relative overflow-hidden">
     
-    <div class="w-full max-w-[420px]">
+    <!-- Decorative Ambient Background Elements -->
+    <div class="absolute top-0 left-1/4 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob"></div>
+    <div class="absolute top-1/4 right-1/4 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-2000"></div>
+    <div class="absolute -bottom-32 left-1/3 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-4000"></div>
+
+    <div class="w-full max-w-[480px] relative z-10 animate-fade-in-up">
       <!-- Card -->
-      <div class="bg-white py-10 px-8 sm:px-12 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+      <div class="bg-white/80 backdrop-blur-2xl py-14 px-8 sm:px-14 rounded-[3rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white/50">
         
         <!-- Header -->
-        <div class="flex flex-col items-center mb-10">
-          <div class="w-20 h-20 bg-blue-50/50 rounded-2xl flex items-center justify-center mb-6 p-4">
-            <img :src="logo" alt="Excuse List" class="w-full h-full object-contain" />
+        <div class="flex flex-col items-center mb-12">
+          <!-- Bigger Logo with gentle hover effect -->
+          <div class="w-32 h-32 bg-gradient-to-tr from-white to-blue-50/50 rounded-[2rem] shadow-[inset_0_2px_10px_rgba(0,0,0,0.02),0_4px_10px_rgba(0,0,0,0.02)] flex items-center justify-center mb-8 p-3 group transition-transform duration-500 hover:scale-105">
+            <img :src="logo" alt="Excuse List" class="w-full h-full object-contain drop-shadow-sm group-hover:drop-shadow-md transition-all duration-500" />
           </div>
-          <h2 class="text-2xl font-bold text-gray-900 tracking-tight">Willkommen zurück</h2>
-          <p class="mt-2 text-sm text-gray-500">Loggen Sie sich in Ihren Account ein</p>
+          <h2 class="text-3xl font-black text-gray-900 tracking-tight text-center">Excuse List</h2>
+          <p class="mt-3 text-base text-gray-500 font-medium">Loggen Sie sich ein, um fortzufahren</p>
         </div>
 
-        <form class="space-y-6" @submit.prevent="login">
+        <form class="space-y-8" @submit.prevent="login">
           <!-- Username Input -->
           <div>
-            <label for="username" class="block text-sm font-semibold leading-6 text-gray-900">
+            <label for="username" class="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 ml-1">
               Benutzername
             </label>
-            <div class="mt-2">
+            <div>
               <input
                 id="username"
                 v-model="username"
                 type="text"
                 placeholder="z.B. if230180 oder admin"
                 :disabled="loading"
-                class="block w-full rounded-xl border-0 py-3.5 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6 transition-all bg-gray-50/50 focus:bg-white"
+                class="block w-full rounded-2xl border-0 py-4 px-5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200/80 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 text-base leading-6 transition-all duration-300 bg-white/50 hover:bg-white focus:bg-white disabled:opacity-50"
               />
             </div>
           </div>
 
           <!-- Password Input -->
           <div>
-            <label for="password" class="block text-sm font-semibold leading-6 text-gray-900">
+            <label for="password" class="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 ml-1">
               Passwort
             </label>
-            <div class="mt-2">
+            <div>
               <input
                 id="password"
                 v-model="password"
                 type="password"
                 placeholder="••••••••"
                 :disabled="loading"
-                class="block w-full rounded-xl border-0 py-3.5 px-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6 transition-all bg-gray-50/50 focus:bg-white"
+                class="block w-full rounded-2xl border-0 py-4 px-5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-200/80 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 text-base leading-6 transition-all duration-300 bg-white/50 hover:bg-white focus:bg-white disabled:opacity-50"
               />
             </div>
           </div>
 
           <!-- Error Message -->
-          <div v-if="error" class="rounded-xl bg-red-50 p-4 border border-red-100">
-            <div class="flex">
+          <div v-if="error" class="rounded-2xl bg-red-50 p-4 border border-red-100 animate-shake">
+            <div class="flex items-center">
               <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <svg class="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
                 </svg>
               </div>
               <div class="ml-3">
-                <p class="text-sm font-medium text-red-800">{{ error }}</p>
+                <p class="text-sm font-semibold text-red-800">{{ error }}</p>
               </div>
             </div>
           </div>
 
           <!-- Submit Button -->
-          <div class="pt-2">
+          <div class="pt-4">
             <button
               type="submit"
               :disabled="loading"
-              class="flex w-full justify-center items-center rounded-xl bg-blue-600 px-3 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+              class="flex w-full justify-center items-center rounded-2xl bg-blue-600 px-4 py-4 text-base font-bold text-white shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50 hover:bg-blue-500 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
             >
               <svg v-if="loading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -136,10 +142,56 @@ const login = async () => {
       </div>
       
       <!-- Footer -->
-      <p class="text-center text-sm text-gray-500 mt-8">
-        Anmeldung mit Ihren WebUntis-Zugangsdaten.
+      <p class="text-center text-sm font-medium text-gray-500/80 mt-10">
+        Sichere Anmeldung mit Ihren WebUntis-Daten
       </p>
     </div>
 
   </div>
 </template>
+
+<style>
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animated-bg {
+  background: linear-gradient(-45deg, #f8fafc, #e0e7ff, #dbeafe, #f3f4f6);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes blob {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+.animate-blob {
+  animation: blob 10s infinite alternate;
+}
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+.animate-shake {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+</style>
