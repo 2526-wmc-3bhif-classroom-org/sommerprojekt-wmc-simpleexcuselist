@@ -94,7 +94,7 @@ const login = async () => {
           </div>
 
           <!-- Password Input -->
-          <div>
+          <div style="margin-top: 3rem;">
             <!-- EXTRA ABSTAND HIER: mb-6 statt mb-2/mb-3 -->
             <label for="password" class="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-6 ml-1">
               Passwort
