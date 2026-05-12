@@ -193,6 +193,16 @@ export class DB {
         FOREIGN KEY (parentId) REFERENCES Parent(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS Teacher
+      (
+        id           TEXT PRIMARY KEY,
+        username     TEXT NOT NULL UNIQUE,
+        passwordHash TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        className    TEXT NOT NULL,
+        createdAt    TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS ClassTeacher
       (
         className      TEXT PRIMARY KEY,

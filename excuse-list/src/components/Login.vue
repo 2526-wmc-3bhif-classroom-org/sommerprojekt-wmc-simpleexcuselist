@@ -31,6 +31,8 @@ const login = async () => {
 
     if (data.role === 'parent') {
       router.push('/parent');
+    } else if (data.role === 'teacher') {
+      router.push('/teacher');
     } else {
       router.push('/student');
     }

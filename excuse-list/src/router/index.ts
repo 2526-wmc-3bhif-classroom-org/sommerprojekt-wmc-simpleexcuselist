@@ -18,6 +18,11 @@ function getUserRoleFromToken(token: string): string | null {
     }).join(''));
 
     const decoded = JSON.parse(jsonPayload);
+
+    if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+      return null; // token expired
+    }
+
     return decoded.role || null;
   } catch (e) {
     return null;

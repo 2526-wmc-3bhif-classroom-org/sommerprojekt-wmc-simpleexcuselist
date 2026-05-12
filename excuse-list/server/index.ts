@@ -186,8 +186,26 @@ app.post('/api/login', async (req, res) => {
   }
 
   try {
-    // 1. Check if it's a parent login
     const db = new Unit(true);
+
+    // 1. Check if it's a teacher login
+    const teacher = db.prepare(`SELECT * FROM Teacher WHERE username = ?`).get(username) as any;
+    if (teacher) {
+      const isMatch = await bcrypt.compare(password, teacher.passwordHash);
+      db.complete(null);
+      if (isMatch) {
+        const token = jwt.sign(
+          { teacherId: teacher.id, username: teacher.username, role: 'teacher', className: teacher.className },
+          jwtSecret,
+          { expiresIn: '1h' }
+        );
+        return res.json({ token, role: 'teacher' });
+      } else {
+        return res.status(401).json({ error: 'Invalid teacher credentials' });
+      }
+    }
+
+    // 2. Check if it's a parent login
     const parent = db.prepare(`SELECT * FROM Parent WHERE username = ?`).get(username) as any;
 
     if (parent) {
@@ -454,11 +472,8 @@ app.post('/api/parent/excuses/:excuseId/sign', async (req, res) => {
         return res.status(404).json({ error: 'Excuse not found or not owned by this parent' });
       }
 
-      // Update Excuse status
       db.prepare(`UPDATE Excuse SET status = 'signed' WHERE id = ?`).run(excuseId);
-
-      // Temporary step requested by user: Delete the associated absence
-      db.prepare(`DELETE FROM Absence WHERE id = ?`).run(excuse.absenceId);
+      db.prepare(`UPDATE Absence SET status = 'signed' WHERE id = ?`).run(excuse.absenceId);
 
       db.complete(true);
       res.json({ success: true });
@@ -472,6 +487,104 @@ app.post('/api/parent/excuses/:excuseId/sign', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
+app.get('/api/teacher/students', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'teacher') {
+      return res.status(403).json({ error: 'Forbidden: Teacher role required' });
+    }
+
+    const db = new Unit(true);
+    const students = db.prepare(`
+      SELECT untisId, firstName, lastName, className
+      FROM Student
+      WHERE className = ?
+      ORDER BY lastName ASC, firstName ASC
+    `).all(decoded.className);
+    db.complete(null);
+
+    res.json(students);
+  } catch (error: any) {
+    console.error('Error fetching teacher students:', error.message);
+    res.status(500).json({ error: 'Error fetching students', details: error.message });
+  }
+});
+
+app.get('/api/teacher/students/:studentId/absences', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'teacher') {
+      return res.status(403).json({ error: 'Forbidden: Teacher role required' });
+    }
+
+    const { studentId } = req.params;
+    const db = new Unit(true);
+
+    const student = db.prepare(`SELECT untisId FROM Student WHERE untisId = ? AND className = ?`).get(studentId, decoded.className) as any;
+    if (!student) {
+      db.complete(null);
+      return res.status(404).json({ error: 'Student not found in your class' });
+    }
+
+    const absences = db.prepare(`
+      SELECT a.id, a.date, a.startTime, a.endTime, a.status
+      FROM Absence a
+      INNER JOIN Excuse e ON e.absenceId = a.id AND e.status = 'signed'
+      WHERE a.studentUntisId = ?
+      ORDER BY a.date DESC
+    `).all(studentId);
+
+    db.complete(null);
+    res.json(absences);
+  } catch (error: any) {
+    console.error('Error fetching student absences:', error.message);
+    res.status(500).json({ error: 'Error fetching absences', details: error.message });
+  }
+});
+
+async function seedMockTeacher() {
+  const db = new Unit(true);
+  const existing = db.prepare(`SELECT id FROM Teacher WHERE username = ?`).get('prof3bhif') as any;
+  db.complete(null);
+
+  if (existing) return;
+
+  const plainPassword = 'lehrer1234';
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+  const writeDb = new Unit(false);
+  try {
+    writeDb.prepare(`
+      INSERT INTO Teacher (id, username, passwordHash, name, className)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(crypto.randomUUID(), 'prof3bhif', passwordHash, 'Prof. Maier', '3BHIF');
+    writeDb.complete(true);
+
+    console.log('\n==============================================');
+    console.log('Mock Teacher Account Created');
+    console.log('Username: prof3bhif');
+    console.log('Password: lehrer1234');
+    console.log('Class:    3BHIF');
+    console.log('==============================================\n');
+  } catch (err) {
+    writeDb.complete(false);
+    console.error('Failed to seed mock teacher:', err);
+  }
+}
+
+app.listen(port, async () => {
   console.log(`Server running at http://localhost:${port}`);
+  await seedMockTeacher();
 });
