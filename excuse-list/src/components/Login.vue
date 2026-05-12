@@ -14,10 +14,10 @@ const login = async () => {
     error.value = 'Bitte füllen Sie alle Felder aus.';
     return;
   }
-  
+
   error.value = '';
   loading.value = true;
-  
+
   try {
     const response = await fetch('/api/login', {
       method: 'POST',
@@ -54,7 +54,7 @@ const login = async () => {
 
 <template>
   <div class="min-h-screen flex flex-col justify-center items-center py-16 px-4 sm:px-6 lg:px-8 animated-bg relative overflow-hidden">
-    
+
     <!-- Decorative Ambient Background Elements -->
     <div class="absolute top-0 left-1/4 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob"></div>
     <div class="absolute top-1/4 right-1/4 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-2000"></div>
@@ -63,9 +63,9 @@ const login = async () => {
     <div class="w-full max-w-[480px] relative z-10 animate-fade-in-up">
       <!-- Card -->
       <div class="bg-white/80 backdrop-blur-2xl py-14 px-8 sm:px-14 rounded-[3rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white/50">
-        
+
         <!-- Header -->
-        <div class="flex flex-col items-center mb-10">
+        <div class="flex flex-col items-center mb-16">
           <!-- Logo with gentle hover effect -->
           <div class="w-32 h-32 bg-gradient-to-tr from-white to-blue-50/50 rounded-[2rem] shadow-[inset_0_2px_10px_rgba(0,0,0,0.02),0_4px_10px_rgba(0,0,0,0.02)] flex items-center justify-center mb-8 p-3 group transition-transform duration-500 hover:scale-105">
             <img :src="logo" alt="Excuse List" class="w-full h-full object-contain drop-shadow-sm group-hover:drop-shadow-md transition-all duration-500" />
@@ -126,7 +126,7 @@ const login = async () => {
           </div>
 
           <!-- Submit Button -->
-          <div class="pt-2">
+          <div class="pt-10">
             <button
               type="submit"
               :disabled="loading"
@@ -142,7 +142,7 @@ const login = async () => {
         </form>
 
       </div>
-      
+
       <!-- Footer -->
       <p class="text-center text-sm font-medium text-gray-500/80 mt-10">
         Sichere Anmeldung mit Ihren WebUntis-Daten
