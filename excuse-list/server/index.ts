@@ -541,7 +541,7 @@ app.get('/api/teacher/students/:studentId/absences', async (req, res) => {
     const absences = db.prepare(`
       SELECT a.id, a.date, a.startTime, a.endTime, a.status
       FROM Absence a
-      INNER JOIN Excuse e ON e.absenceId = a.id AND e.status = 'signed'
+      INNER JOIN Excuse e ON e.absenceId = a.id AND (e.status = 'signed' OR e.status = 'excused')
       WHERE a.studentUntisId = ?
       ORDER BY a.date DESC
     `).all(studentId);
@@ -556,12 +556,12 @@ app.get('/api/teacher/students/:studentId/absences', async (req, res) => {
 
 async function seedMockTeacher() {
   const db = new Unit(true);
-  const existing = db.prepare(`SELECT id FROM Teacher WHERE username = ?`).get('prof3bhif') as any;
+  const existing = db.prepare(`SELECT id FROM Teacher WHERE username = ?`).get('admin') as any;
   db.complete(null);
 
   if (existing) return;
 
-  const plainPassword = 'lehrer1234';
+  const plainPassword = '1234';
   const passwordHash = await bcrypt.hash(plainPassword, 10);
 
   const writeDb = new Unit(false);
@@ -569,13 +569,13 @@ async function seedMockTeacher() {
     writeDb.prepare(`
       INSERT INTO Teacher (id, username, passwordHash, name, className)
       VALUES (?, ?, ?, ?, ?)
-    `).run(crypto.randomUUID(), 'prof3bhif', passwordHash, 'Prof. Maier', '3BHIF');
+    `).run(crypto.randomUUID(), 'admin', passwordHash, 'Admin', '3BHIF');
     writeDb.complete(true);
 
     console.log('\n==============================================');
     console.log('Mock Teacher Account Created');
-    console.log('Username: prof3bhif');
-    console.log('Password: lehrer1234');
+    console.log('Username: admin');
+    console.log('Password: 1234');
     console.log('Class:    3BHIF');
     console.log('==============================================\n');
   } catch (err) {
@@ -583,6 +583,24 @@ async function seedMockTeacher() {
     console.error('Failed to seed mock teacher:', err);
   }
 }
+
+
+app.post('/api/teacher/absences/:absenceId/excuse', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Auth missing' });
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'teacher') return res.status(403).json({ error: 'Forbidden' });
+    
+    const db = new Unit(false);
+    db.prepare("UPDATE Excuse SET status = 'excused' WHERE absenceId = ?").run(req.params.absenceId);
+    db.complete(true);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(port, async () => {
   console.log(`Server running at http://localhost:${port}`);
