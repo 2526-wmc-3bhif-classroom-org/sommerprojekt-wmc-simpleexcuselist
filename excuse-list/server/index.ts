@@ -373,7 +373,7 @@ app.post('/api/excuses/submit', async (req, res) => {
       return res.status(403).json({ error: 'Nur Schüler können Entschuldigungen einreichen' });
     }
 
-    const { absenceId } = req.body;
+    const { absenceId, message } = req.body;
     if (!absenceId) {
       return res.status(400).json({ error: 'absenceId fehlt' });
     }
@@ -388,9 +388,9 @@ app.post('/api/excuses/submit', async (req, res) => {
       }
 
       db.prepare(`
-        INSERT INTO Excuse (id, absenceId, parentId, status)
-        VALUES (?, ?, ?, 'pending')
-      `).run(crypto.randomUUID(), absenceId, studentParent.parentId);
+        INSERT INTO Excuse (id, absenceId, parentId, message, status)
+        VALUES (?, ?, ?, ?, 'pending')
+      `).run(crypto.randomUUID(), absenceId, studentParent.parentId, message || null);
 
       db.prepare(`
         UPDATE Absence

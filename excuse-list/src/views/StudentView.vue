@@ -21,6 +21,7 @@ const router = useRouter();
 const showModal = ref(false);
 const activeAbsence = ref<Absence | null>(null);
 const excuseMessage = ref('');
+const excuseMessageError = ref(false);
 const excuseFiles = ref<File[]>([]);
 const submitting = ref(false);
 const submitSuccess = ref(false);
@@ -67,6 +68,7 @@ const logout = () => { localStorage.removeItem('untis_jwt'); router.push('/'); }
 const openModal = (absence: Absence) => {
   activeAbsence.value = absence;
   excuseMessage.value = '';
+  excuseMessageError.value = false;
   excuseFiles.value = [];
   submitSuccess.value = false;
   showModal.value = true;
@@ -93,20 +95,28 @@ const removeFile = (index: number) => {
 
 const submitExcuse = async () => {
   if (!activeAbsence.value) return;
+  excuseMessageError.value = false;
+
+  if (!excuseMessage.value.trim()) {
+    excuseMessageError.value = true;
+    return;
+  }
+
   const token = localStorage.getItem('untis_jwt');
   if (!token) { router.push('/'); return; }
 
   submitting.value = true;
   try {
-    const formData = new FormData();
-    formData.append('absenceId', activeAbsence.value.id);
-    formData.append('message', excuseMessage.value);
-    excuseFiles.value.forEach(f => formData.append('attachments', f));
-
     const res = await fetch('/api/excuses/submit', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        absenceId: activeAbsence.value.id,
+        message: excuseMessage.value
+      }),
     });
 
     if (!res.ok) {
@@ -208,7 +218,7 @@ const submitExcuse = async () => {
           </div>
           <div>
             <p class="text-lg font-bold text-gray-900">Entschuldigung eingereicht</p>
-            <p class="text-sm text-gray-500 mt-1">Die Lehrkraft wurde benachrichtigt und kann den Anhang herunterladen.</p>
+            <p class="text-sm text-gray-500 mt-1">Dein Elternteil/Aufseher wurde benachrichtigt und kann sich die Entschuldigung ansehen</p>
           </div>
           <button @click="closeModal" class="mt-2 bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-2 rounded-lg font-bold text-sm uppercase transition">Schließen</button>
         </div>
@@ -241,13 +251,15 @@ const submitExcuse = async () => {
           <div class="px-6 py-5 space-y-5">
             <!-- Message -->
             <div>
-              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Nachricht / Begründung</label>
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Nachricht / Begründung <span class="text-red-500">*</span></label>
               <textarea
                 v-model="excuseMessage"
                 rows="4"
                 placeholder="z. B. Mein Kind war wegen einer Erkältung krank und konnte nicht am Unterricht teilnehmen."
-                class="w-full text-sm border border-gray-200 rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 placeholder-gray-300"
+                :class="['w-full text-sm border rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:border-transparent text-gray-700 placeholder-gray-300', excuseMessageError ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 focus:ring-blue-500']"
+                @input="excuseMessageError = false"
               />
+              <p v-if="excuseMessageError" class="text-xs text-red-500 mt-1 font-semibold">Bitte gib eine Begründung ein.</p>
             </div>
 
             <!-- File Upload -->
