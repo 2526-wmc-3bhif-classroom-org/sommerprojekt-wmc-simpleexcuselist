@@ -93,6 +93,13 @@ const removeFile = (index: number) => {
   excuseFiles.value.splice(index, 1);
 };
 
+const convertFileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = () => resolve(reader.result as string);
+  reader.onerror = error => reject(error);
+});
+
 const submitExcuse = async () => {
   if (!activeAbsence.value) return;
   excuseMessageError.value = false;
@@ -107,6 +114,11 @@ const submitExcuse = async () => {
 
   submitting.value = true;
   try {
+    const attachments = await Promise.all(excuseFiles.value.map(async f => ({
+      fileName: f.name,
+      fileData: await convertFileToBase64(f)
+    })));
+
     const res = await fetch('/api/excuses/submit', {
       method: 'POST',
       headers: {
@@ -115,7 +127,8 @@ const submitExcuse = async () => {
       },
       body: JSON.stringify({
         absenceId: activeAbsence.value.id,
-        message: excuseMessage.value
+        message: excuseMessage.value,
+        attachments
       }),
     });
 
@@ -282,7 +295,7 @@ const submitExcuse = async () => {
               <input ref="fileInputRef" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple class="hidden" @change="onFileChange" />
 
               <!-- File List -->
-              <div v-if="excuseFiles.length > 0" class="mt-3 space-y-2">
+              <div v-if="excuseFiles.length > 0" class="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
                 <div
                   v-for="(file, i) in excuseFiles"
                   :key="i"

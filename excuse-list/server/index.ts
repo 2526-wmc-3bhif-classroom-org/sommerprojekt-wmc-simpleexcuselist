@@ -373,7 +373,7 @@ app.post('/api/excuses/submit', async (req, res) => {
       return res.status(403).json({ error: 'Nur Schüler können Entschuldigungen einreichen' });
     }
 
-    const { absenceId, message } = req.body;
+    const { absenceId, message, attachments } = req.body;
     if (!absenceId) {
       return res.status(400).json({ error: 'absenceId fehlt' });
     }
@@ -387,10 +387,24 @@ app.post('/api/excuses/submit', async (req, res) => {
         return res.status(400).json({ error: 'Diesem Schüler ist kein Elternteil zugewiesen' });
       }
 
+      const excuseId = crypto.randomUUID();
+
       db.prepare(`
         INSERT INTO Excuse (id, absenceId, parentId, message, status)
         VALUES (?, ?, ?, ?, 'pending')
-      `).run(crypto.randomUUID(), absenceId, studentParent.parentId, message || null);
+      `).run(excuseId, absenceId, studentParent.parentId, message || null);
+
+      if (attachments && Array.isArray(attachments)) {
+        const stmt = db.prepare(`
+          INSERT INTO Attachment (id, excuseId, fileName, fileData)
+          VALUES (?, ?, ?, ?)
+        `);
+        for (const att of attachments) {
+          if (att.fileName && att.fileData) {
+            stmt.run(crypto.randomUUID(), excuseId, att.fileName, att.fileData);
+          }
+        }
+      }
 
       db.prepare(`
         UPDATE Absence
