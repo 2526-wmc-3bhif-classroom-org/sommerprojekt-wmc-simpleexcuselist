@@ -117,6 +117,7 @@ export class DB {
   private static rebuildDatabase(connection: Database): void {
     connection.pragma("foreign_keys = OFF");
     connection.exec(`
+      DROP TABLE IF EXISTS Attachment;
       DROP TABLE IF EXISTS Excuse;
       DROP TABLE IF EXISTS StudentParent;
       DROP TABLE IF EXISTS ClassTeacher;
@@ -191,6 +192,17 @@ export class DB {
 
         FOREIGN KEY (absenceId) REFERENCES Absence(id) ON DELETE CASCADE,
         FOREIGN KEY (parentId) REFERENCES Parent(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS Attachment
+      (
+        id        TEXT PRIMARY KEY,
+        excuseId  TEXT NOT NULL,
+        fileName  TEXT NOT NULL,
+        fileData  TEXT NOT NULL,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (excuseId) REFERENCES Excuse(id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS Teacher

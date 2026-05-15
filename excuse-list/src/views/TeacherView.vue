@@ -15,6 +15,13 @@ interface Absence {
   startTime: number
   endTime: number
   status: string
+  excuseId: string
+  excuseMessage?: string
+}
+
+interface Attachment {
+  fileName: string
+  fileData: string
 }
 
 const router = useRouter()
@@ -26,6 +33,12 @@ const loadingAbsences = ref(false)
 const error = ref('')
 const teacherName = ref('')
 const teacherClass = ref('')
+
+// --- Attachments Modal ---
+const showAttachmentModal = ref(false)
+const loadingAttachments = ref(false)
+const activeAttachments = ref<Attachment[]>([])
+const activeExcuseMessage = ref('')
 
 const getToken = () => {
   const token = localStorage.getItem('untis_jwt')
@@ -93,6 +106,34 @@ const formatDate = (dateNum: number) => {
 const formatTime = (timeNum: number) => {
   const s = timeNum.toString().padStart(4, '0')
   return `${s.substring(0, 2)}:${s.substring(2, 4)}`
+}
+
+const viewAttachments = async (absence: Absence) => {
+  activeExcuseMessage.value = absence.excuseMessage || ''
+  activeAttachments.value = []
+  showAttachmentModal.value = true
+  const token = getToken()
+  if (!token) return
+
+  loadingAttachments.value = true
+  try {
+    const res = await fetch(`/api/excuses/${absence.excuseId}/attachments`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (res.ok) {
+      activeAttachments.value = await res.json()
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loadingAttachments.value = false
+  }
+}
+
+const closeAttachmentModal = () => {
+  showAttachmentModal.value = false
+  activeAttachments.value = []
+  activeExcuseMessage.value = ''
 }
 
 const logout = () => {
@@ -238,6 +279,7 @@ onMounted(fetchStudents)
                     <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
                     <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
                     <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
+                    <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
                     <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
                   </tr>
                 </thead>
@@ -247,6 +289,11 @@ onMounted(fetchStudents)
                     <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
                     <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
                     <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
+                    <td class="px-6 py-4 text-center">
+                      <button @click="viewAttachments(absence)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
+                        Ansehen
+                      </button>
+                    </td>
                     <td class="px-6 py-4 text-center">
                       <span class="inline-flex items-center gap-1.5 text-green-700 text-xs font-bold">
                         <span class="w-2 h-2 rounded-full bg-green-600"></span>
@@ -262,5 +309,41 @@ onMounted(fetchStudents)
         </div>
       </div>
     </div>
+
+    <!-- Details Modal -->
+    <div v-if="showAttachmentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeAttachmentModal">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <p class="font-bold text-gray-900">Entschuldigungs-Details</p>
+          <button @click="closeAttachmentModal" class="text-gray-400 hover:text-gray-600 transition p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto">
+          <div class="mb-4">
+            <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">Nachricht / Begründung</h4>
+            <p class="text-sm text-gray-800 bg-gray-50 p-4 rounded-xl border border-gray-100">
+              {{ activeExcuseMessage || 'Keine Begründung angegeben' }}
+            </p>
+          </div>
+
+          <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Anhänge</h4>
+          <div v-if="loadingAttachments" class="text-sm text-gray-500">Lade Anhänge...</div>
+          <div v-else-if="activeAttachments.length === 0" class="text-sm text-gray-500 italic">Keine Anhänge verfügbar.</div>
+          <div v-else class="space-y-4">
+            <div v-for="(file, i) in activeAttachments" :key="i" class="border border-gray-200 rounded-xl overflow-hidden p-2">
+              <p class="text-xs font-bold text-gray-600 mb-2 px-2">{{ file.fileName }}</p>
+              <img v-if="file.fileData.startsWith('data:image')" :src="file.fileData" class="w-full h-auto rounded-lg object-contain max-h-64" alt="Anhang" />
+              <iframe v-else-if="file.fileData.startsWith('data:application/pdf')" :src="file.fileData" class="w-full h-64 rounded-lg"></iframe>
+              <div v-else class="px-2 py-4 text-sm text-gray-500 italic">Format wird nicht unterstützt.</div>
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-100">
+          <button @click="closeAttachmentModal" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 py-2.5 rounded-xl font-bold uppercase transition text-sm">Schließen</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>

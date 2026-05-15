@@ -46,7 +46,8 @@ async function withUntis<T>(
 }
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 async function fetchUserDetails(untis: WebUntis, personType: number, personId: number, username: string) {
   let firstName = username;
@@ -446,6 +447,7 @@ app.get('/api/parent/excuses', async (req, res) => {
         a.date,
         a.startTime,
         a.endTime,
+        e.message as excuseMessage,
         s.firstName as studentFirstName,
         s.lastName as studentLastName
       FROM Excuse e
@@ -501,6 +503,32 @@ app.post('/api/parent/excuses/:excuseId/sign', async (req, res) => {
   }
 });
 
+app.get('/api/excuses/:excuseId/attachments', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'teacher' && decoded.role !== 'parent') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { excuseId } = req.params;
+    const db = new Unit(true);
+
+    const attachments = db.prepare(`SELECT fileName, fileData FROM Attachment WHERE excuseId = ?`).all(excuseId);
+
+    db.complete(null);
+    res.json(attachments);
+  } catch (error: any) {
+    console.error('Error fetching attachments:', error.message);
+    res.status(500).json({ error: 'Error fetching attachments', details: error.message });
+  }
+});
+
 app.get('/api/teacher/students', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -553,7 +581,7 @@ app.get('/api/teacher/students/:studentId/absences', async (req, res) => {
     }
 
     const absences = db.prepare(`
-      SELECT a.id, a.date, a.startTime, a.endTime, a.status
+      SELECT a.id, a.date, a.startTime, a.endTime, a.status, e.id as excuseId, e.message as excuseMessage
       FROM Absence a
       INNER JOIN Excuse e ON e.absenceId = a.id AND e.status = 'signed'
       WHERE a.studentUntisId = ?
