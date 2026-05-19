@@ -66,7 +66,6 @@ export class DB {
   public static createDBConnection(): Database {
     const db = new BetterSqlite3(dbFileName, {
       fileMustExist: false,
-      verbose: (s: unknown) => DB.logStatement(s)
     });
     db.pragma("foreign_keys = ON");
 
@@ -85,18 +84,6 @@ export class DB {
 
   public static rollbackTransaction(connection: Database): void {
     connection.exec("rollback;");
-  }
-
-  private static logStatement(statement: string | unknown): void {
-    if (typeof statement !== "string") {
-      return;
-    }
-    const start = statement.slice(0, 6).trim().toLowerCase();
-    // Avoid using startsWith for compatibility with older TS lib settings
-    if (start.indexOf("pragma") === 0 || start.indexOf("create") === 0) {
-      return;
-    }
-    console.log(`SQL: ${statement}`);
   }
 
   private static ensureTablesCreated(connection: Database): void {
