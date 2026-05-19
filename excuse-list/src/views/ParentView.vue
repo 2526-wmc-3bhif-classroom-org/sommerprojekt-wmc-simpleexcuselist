@@ -3,14 +3,19 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 interface Excuse {
-  excuseId: string;
-  excuseStatus: string;
   absenceId: string;
+  excuseStatus: string;
   date: number;
   startTime: number;
   endTime: number;
   studentFirstName: string;
   studentLastName: string;
+  excuseMessage?: string;
+}
+
+interface Attachment {
+  fileName: string;
+  fileData: string;
 }
 
 const excuses = ref<Excuse[]>([]);
@@ -26,6 +31,12 @@ const isDrawing = ref(false);
 let ctx: CanvasRenderingContext2D | null = null;
 let lastX = 0;
 let lastY = 0;
+
+// --- Attachments Modal State ---
+const showAttachmentModal = ref(false);
+const loadingAttachments = ref(false);
+const activeAttachments = ref<Attachment[]>([]);
+const activeExcuseMessage = ref('');
 
 const fetchExcuses = async () => {
   const token = localStorage.getItem('untis_jwt');
@@ -105,6 +116,35 @@ const getStatusText = (status: string) => {
     default:
       return status;
   }
+};
+
+const viewAttachments = async (excuse: Excuse) => {
+  activeExcuseMessage.value = excuse.excuseMessage || '';
+  activeAttachments.value = [];
+  showAttachmentModal.value = true;
+
+  const token = localStorage.getItem('untis_jwt');
+  if (!token) return;
+
+  loadingAttachments.value = true;
+  try {
+    const res = await fetch(`/api/absences/${excuse.absenceId}/attachments`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      activeAttachments.value = await res.json();
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    loadingAttachments.value = false;
+  }
+};
+
+const closeAttachmentModal = () => {
+  showAttachmentModal.value = false;
+  activeAttachments.value = [];
+  activeExcuseMessage.value = '';
 };
 
 // Canvas Drawing Logic
@@ -209,7 +249,7 @@ const signExcuse = async (excuseId: string) => {
   }
 
   try {
-    const res = await fetch(`/api/parent/excuses/${excuseId}/sign`, {
+    const res = await fetch(`/api/parent/absences/${excuseId}/sign`, {
        method: 'POST',
        headers: {
          'Content-Type': 'application/json',
@@ -221,7 +261,7 @@ const signExcuse = async (excuseId: string) => {
     if(!res.ok) throw new Error('Fehler beim Unterzeichnen');
 
     // Remove locally
-    excuses.value = excuses.value.filter(e => e.excuseId !== excuseId);
+    excuses.value = excuses.value.filter(e => e.absenceId !== excuseId);
   } catch(e) {
      console.error(e);
      alert('Konnte nicht unterzeichnet werden.');
@@ -230,7 +270,7 @@ const signExcuse = async (excuseId: string) => {
 
 const rejectExcuse = async (excuseId: string) => {
   // Temporary just hide it locally
-  excuses.value = excuses.value.filter(e => e.excuseId !== excuseId);
+  excuses.value = excuses.value.filter(e => e.absenceId !== excuseId);
 };
 
 const logout = () => {
@@ -289,26 +329,32 @@ const logout = () => {
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
+                <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
                 <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
-              <tr v-for="(excuse, index) in excuses" :key="excuse.excuseId" class="hover:bg-blue-50/50 transition">
+              <tr v-for="(excuse, index) in excuses" :key="excuse.absenceId" class="hover:bg-blue-50/50 transition">
                 <td class="px-6 py-4 font-bold text-gray-900">{{ index + 1 }}</td>
                 <td class="px-6 py-4 text-sm text-gray-900 font-semibold">{{ excuse.studentFirstName }} {{ excuse.studentLastName }}</td>
                 <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(excuse.date) }}</td>
                 <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(excuse.startTime) }}</td>
                 <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(excuse.endTime) }}</td>
                 <td class="px-6 py-4 text-center">
+                  <button @click="viewAttachments(excuse)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
+                    Ansehen
+                  </button>
+                </td>
+                <td class="px-6 py-4 text-center">
                   <div class="flex gap-2 justify-center">
                     <button
-                      @click="openSignatureModal(excuse.excuseId)"
+                      @click="openSignatureModal(excuse.absenceId)"
                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
                     >
                       Unterschreiben
                     </button>
                     <button
-                      @click="rejectExcuse(excuse.excuseId)"
+                      @click="rejectExcuse(excuse.absenceId)"
                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
                     >
                       Ablehnen
@@ -377,6 +423,41 @@ const logout = () => {
           <button @click="confirmSignature" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold uppercase text-sm transition">
             Bestätigen
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div v-if="showAttachmentModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" @click.self="closeAttachmentModal">
+      <div class="bg-white rounded-2xl shadow-2xl p-0 w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <p class="font-bold text-gray-900">Entschuldigungs-Details</p>
+          <button @click="closeAttachmentModal" class="text-gray-400 hover:text-gray-600 transition p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto">
+          <div class="mb-4">
+            <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">Nachricht / Begründung</h4>
+            <p class="text-sm text-gray-800 bg-gray-50 p-4 rounded-xl border border-gray-100">
+              {{ activeExcuseMessage || 'Keine Begründung angegeben' }}
+            </p>
+          </div>
+
+          <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Anhänge</h4>
+          <div v-if="loadingAttachments" class="text-sm text-gray-500">Lade Anhänge...</div>
+          <div v-else-if="activeAttachments.length === 0" class="text-sm text-gray-500 italic">Keine Anhänge verfügbar.</div>
+          <div v-else class="space-y-4">
+            <div v-for="(file, i) in activeAttachments" :key="i" class="border border-gray-200 rounded-xl overflow-hidden p-2">
+              <p class="text-xs font-bold text-gray-600 mb-2 px-2">{{ file.fileName }}</p>
+              <img v-if="file.fileData.startsWith('data:image')" :src="file.fileData" class="w-full h-auto rounded-lg object-contain max-h-64" alt="Anhang" />
+              <iframe v-else-if="file.fileData.startsWith('data:application/pdf')" :src="file.fileData" class="w-full h-64 rounded-lg"></iframe>
+              <div v-else class="px-2 py-4 text-sm text-gray-500 italic">Format wird nicht unterstützt.</div>
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-100">
+          <button @click="closeAttachmentModal" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 py-2.5 rounded-xl font-bold uppercase transition text-sm">Schließen</button>
         </div>
       </div>
     </div>
