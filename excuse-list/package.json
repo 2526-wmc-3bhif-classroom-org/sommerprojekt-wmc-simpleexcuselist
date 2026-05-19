@@ -16,7 +16,7 @@
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache",
     "format": "prettier --write --experimental-cli src/",
-    "server": "tsx server/index.ts"
+    "server": "tsx server/src/index.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
