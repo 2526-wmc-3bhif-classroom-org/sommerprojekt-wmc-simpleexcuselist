@@ -161,35 +161,24 @@ export class DB {
         endTime        INTEGER NOT NULL,
         isExcusedUntis INTEGER DEFAULT 0,
         status         TEXT NOT NULL DEFAULT 'open',
+        excuseParentId TEXT,
+        excuseMessage  TEXT,
         createdAt      TEXT DEFAULT CURRENT_TIMESTAMP,
         updatedAt      TEXT DEFAULT CURRENT_TIMESTAMP,
 
-        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS Excuse
-      (
-        id        TEXT PRIMARY KEY,
-        absenceId TEXT NOT NULL,
-        parentId  TEXT NOT NULL,
-        message   TEXT,
-        status    TEXT NOT NULL DEFAULT 'pending',
-        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-
-        FOREIGN KEY (absenceId) REFERENCES Absence(id) ON DELETE CASCADE,
-        FOREIGN KEY (parentId) REFERENCES Parent(id) ON DELETE CASCADE
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE,
+        FOREIGN KEY (excuseParentId) REFERENCES Parent(id) ON DELETE SET NULL
       );
 
       CREATE TABLE IF NOT EXISTS Attachment
       (
         id        TEXT PRIMARY KEY,
-        excuseId  TEXT NOT NULL,
+        absenceId TEXT NOT NULL,
         fileName  TEXT NOT NULL,
         fileData  TEXT NOT NULL,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
 
-        FOREIGN KEY (excuseId) REFERENCES Excuse(id) ON DELETE CASCADE
+        FOREIGN KEY (absenceId) REFERENCES Absence(id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS Teacher
@@ -211,7 +200,6 @@ export class DB {
       CREATE INDEX IF NOT EXISTS idx_student_class ON Student(className);
       CREATE INDEX IF NOT EXISTS idx_absence_student ON Absence(studentUntisId);
       CREATE INDEX IF NOT EXISTS idx_absence_status ON Absence(status);
-      CREATE INDEX IF NOT EXISTS idx_excuse_absence ON Excuse(absenceId);
       CREATE INDEX IF NOT EXISTS idx_studentparent_parent ON StudentParent(parentId);
     `);
   }

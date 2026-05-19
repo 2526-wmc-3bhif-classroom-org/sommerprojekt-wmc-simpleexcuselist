@@ -22,11 +22,10 @@ export function getStudentSignedAbsences(studentId: string, className: string) {
     return null;
   }
   const absences = db.prepare(`
-    SELECT a.id, a.date, a.startTime, a.endTime, a.status, e.id as excuseId, e.message as excuseMessage
-    FROM Absence a
-    INNER JOIN Excuse e ON e.absenceId = a.id AND e.status = 'signed'
-    WHERE a.studentUntisId = ?
-    ORDER BY a.date DESC
+    SELECT id, date, startTime, endTime, status, excuseMessage
+    FROM Absence
+    WHERE studentUntisId = ? AND status = 'signed'
+    ORDER BY date DESC
   `).all(studentId);
   db.complete(null);
   return absences;

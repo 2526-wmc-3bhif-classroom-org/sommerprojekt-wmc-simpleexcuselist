@@ -34,11 +34,3 @@ export function getAbsencesByStudent(untisId: number): any[] {
   db.complete(null);
   return absences as any[];
 }
-
-export function updateAbsenceToPending(db: Unit, absenceId: string, studentUntisId: number) {
-  db.prepare(`
-    UPDATE Absence
-    SET status = 'pending'
-    WHERE id = ? AND studentUntisId = ?
-  `).run(absenceId, studentUntisId);
-}

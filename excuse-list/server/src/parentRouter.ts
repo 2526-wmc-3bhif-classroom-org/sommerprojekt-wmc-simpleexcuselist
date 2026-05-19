@@ -2,33 +2,33 @@ import { Router } from 'express';
 import { Unit } from '../../data/unit';
 import { verifyJwt } from '../middleware/auth';
 import { requireParent } from '../middleware/roleGuard';
-import { getParentPendingExcuses, getExcuseByIdAndParent, signExcuse } from '../data/excuseRepository';
+import { getParentPendingAbsences, getAbsenceByIdAndParent, signAbsence } from '../data/excuseRepository';
 
 const router = Router();
 
 router.get('/api/parent/excuses', verifyJwt, requireParent, async (req, res) => {
   try {
-    const excuses = getParentPendingExcuses(req.user!.parentId!);
-    res.json(excuses);
+    const absences = getParentPendingAbsences(req.user!.parentId!);
+    res.json(absences);
   } catch (error: any) {
     console.error('Error fetching parent excuses:', error.message);
     res.status(500).json({ error: 'Error fetching parent excuses', details: error.message });
   }
 });
 
-router.post('/api/parent/excuses/:excuseId/sign', verifyJwt, requireParent, async (req, res) => {
+router.post('/api/parent/absences/:absenceId/sign', verifyJwt, requireParent, async (req, res) => {
   try {
-    const { excuseId } = req.params;
+    const { absenceId } = req.params;
     const db = new Unit(false);
 
     try {
-      const excuse = getExcuseByIdAndParent(db, excuseId, req.user!.parentId!);
-      if (!excuse) {
+      const absence = getAbsenceByIdAndParent(db, absenceId, req.user!.parentId!);
+      if (!absence) {
         db.complete(false);
-        return res.status(404).json({ error: 'Excuse not found or not owned by this parent' });
+        return res.status(404).json({ error: 'Absence not found or not owned by this parent' });
       }
 
-      signExcuse(db, excuseId, excuse.absenceId);
+      signAbsence(db, absenceId);
 
       db.complete(true);
       res.json({ success: true });
@@ -37,8 +37,8 @@ router.post('/api/parent/excuses/:excuseId/sign', verifyJwt, requireParent, asyn
       throw err;
     }
   } catch (error: any) {
-    console.error('Error signing excuse:', error.message);
-    res.status(500).json({ error: 'Error signing excuse' });
+    console.error('Error signing absence:', error.message);
+    res.status(500).json({ error: 'Error signing absence' });
   }
 });
 

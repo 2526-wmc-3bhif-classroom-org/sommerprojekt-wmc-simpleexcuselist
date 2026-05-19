@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import crypto from 'node:crypto';
 import { Unit } from '../../data/unit';
 import { verifyJwt } from '../middleware/auth';
 import { requireStudent } from '../middleware/roleGuard';
-import { getAbsencesByStudent, updateAbsenceToPending } from '../data/absenceRepository';
+import { getAbsencesByStudent } from '../data/absenceRepository';
 import { getStudentParent, } from '../data/parentRepository';
-import { insertExcuse, insertAttachments } from '../data/excuseRepository';
+import { updateAbsenceWithExcuse, insertAttachments } from '../data/excuseRepository';
 
 const router = Router();
 
@@ -42,15 +41,11 @@ router.post('/api/excuses/submit', verifyJwt, requireStudent, async (req, res) =
         return res.status(400).json({ error: 'Diesem Schüler ist kein Elternteil zugewiesen' });
       }
 
-      const excuseId = crypto.randomUUID();
-
-      insertExcuse(db, excuseId, absenceId, studentParent.parentId, message || null);
+      updateAbsenceWithExcuse(db, absenceId, studentParent.parentId, message || null);
 
       if (attachments && Array.isArray(attachments)) {
-        insertAttachments(db, excuseId, attachments);
+        insertAttachments(db, absenceId, attachments);
       }
-
-      updateAbsenceToPending(db, absenceId, req.user!.untisId!);
 
       db.complete(true);
       res.json({ success: true });

@@ -15,7 +15,6 @@ interface Absence {
   startTime: number
   endTime: number
   status: string
-  excuseId: string
   excuseMessage?: string
 }
 
@@ -117,7 +116,7 @@ const viewAttachments = async (absence: Absence) => {
 
   loadingAttachments.value = true
   try {
-    const res = await fetch(`/api/excuses/${absence.excuseId}/attachments`, {
+    const res = await fetch(`/api/absences/${absence.id}/attachments`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (res.ok) {

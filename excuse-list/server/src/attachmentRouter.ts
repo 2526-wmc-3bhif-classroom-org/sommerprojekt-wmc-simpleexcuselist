@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { verifyJwt } from '../middleware/auth';
 import { requireTeacherOrParent } from '../middleware/roleGuard';
-import { getAttachmentsByExcuse } from '../data/excuseRepository';
+import { getAttachmentsByAbsence } from '../data/excuseRepository';
 
 const router = Router();
 
-router.get('/api/excuses/:excuseId/attachments', verifyJwt, requireTeacherOrParent, async (req, res) => {
+router.get('/api/absences/:absenceId/attachments', verifyJwt, requireTeacherOrParent, async (req, res) => {
   try {
-    const { excuseId } = req.params;
-    const attachments = getAttachmentsByExcuse(excuseId);
+    const { absenceId } = req.params;
+    const attachments = getAttachmentsByAbsence(absenceId);
     res.json(attachments);
   } catch (error: any) {
     console.error('Error fetching attachments:', error.message);

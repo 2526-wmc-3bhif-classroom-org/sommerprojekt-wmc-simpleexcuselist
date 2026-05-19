@@ -3,9 +3,8 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 interface Excuse {
-  excuseId: string;
-  excuseStatus: string;
   absenceId: string;
+  excuseStatus: string;
   date: number;
   startTime: number;
   endTime: number;
@@ -129,7 +128,7 @@ const viewAttachments = async (excuse: Excuse) => {
 
   loadingAttachments.value = true;
   try {
-    const res = await fetch(`/api/excuses/${excuse.excuseId}/attachments`, {
+    const res = await fetch(`/api/absences/${excuse.absenceId}/attachments`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (res.ok) {
@@ -250,7 +249,7 @@ const signExcuse = async (excuseId: string) => {
   }
 
   try {
-    const res = await fetch(`/api/parent/excuses/${excuseId}/sign`, {
+    const res = await fetch(`/api/parent/absences/${excuseId}/sign`, {
        method: 'POST',
        headers: {
          'Content-Type': 'application/json',
@@ -262,7 +261,7 @@ const signExcuse = async (excuseId: string) => {
     if(!res.ok) throw new Error('Fehler beim Unterzeichnen');
 
     // Remove locally
-    excuses.value = excuses.value.filter(e => e.excuseId !== excuseId);
+    excuses.value = excuses.value.filter(e => e.absenceId !== excuseId);
   } catch(e) {
      console.error(e);
      alert('Konnte nicht unterzeichnet werden.');
@@ -271,7 +270,7 @@ const signExcuse = async (excuseId: string) => {
 
 const rejectExcuse = async (excuseId: string) => {
   // Temporary just hide it locally
-  excuses.value = excuses.value.filter(e => e.excuseId !== excuseId);
+  excuses.value = excuses.value.filter(e => e.absenceId !== excuseId);
 };
 
 const logout = () => {
@@ -335,7 +334,7 @@ const logout = () => {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
-              <tr v-for="(excuse, index) in excuses" :key="excuse.excuseId" class="hover:bg-blue-50/50 transition">
+              <tr v-for="(excuse, index) in excuses" :key="excuse.absenceId" class="hover:bg-blue-50/50 transition">
                 <td class="px-6 py-4 font-bold text-gray-900">{{ index + 1 }}</td>
                 <td class="px-6 py-4 text-sm text-gray-900 font-semibold">{{ excuse.studentFirstName }} {{ excuse.studentLastName }}</td>
                 <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(excuse.date) }}</td>
@@ -349,13 +348,13 @@ const logout = () => {
                 <td class="px-6 py-4 text-center">
                   <div class="flex gap-2 justify-center">
                     <button
-                      @click="openSignatureModal(excuse.excuseId)"
+                      @click="openSignatureModal(excuse.absenceId)"
                       class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
                     >
                       Unterschreiben
                     </button>
                     <button
-                      @click="rejectExcuse(excuse.excuseId)"
+                      @click="rejectExcuse(excuse.absenceId)"
                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
                     >
                       Ablehnen
