@@ -9,7 +9,9 @@ import {
   fetchUserDetails,
   fetchUserClassAndNamesFallback,
   fetchRandomFirstName,
+  fetchTimetableForRange,
 } from '../data/untisService';
+import { syncAbsenceLessons } from '../data/analyticsRepository';
 import { upsertStudent } from '../data/studentRepository';
 import {
   getTeacherByUsername,
@@ -22,6 +24,50 @@ import {
 import { syncAbsences } from '../data/absenceRepository';
 
 const router = Router();
+
+function untisIntToDate(d: number): Date {
+  const s = String(d);
+  return new Date(
+    Number(s.slice(0, 4)),
+    Number(s.slice(4, 6)) - 1,
+    Number(s.slice(6, 8)),
+  );
+}
+
+// Fetches the student's timetable for the span their absences cover, matches
+// lessons that overlap an absence, and stores them. Runs after the login
+// response is sent so it never adds latency to the (already slow) login.
+async function syncStudentTimetableInBackground(
+  username: string,
+  password: string,
+  personId: number,
+  untisAbsences: any[],
+): Promise<void> {
+  try {
+    const dates = untisAbsences
+      .map((a) => Number(a.startDate ?? a.date))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (dates.length === 0) return;
+
+    const start = untisIntToDate(Math.min(...dates));
+    const end = untisIntToDate(Math.max(...dates));
+
+    const lessons = await withUntis(username, password, (untis) =>
+      fetchTimetableForRange(untis, start, end),
+    );
+
+    const db = new Unit(false);
+    try {
+      syncAbsenceLessons(db, personId, lessons, untisAbsences);
+      db.complete(true);
+    } catch (err) {
+      db.complete(false);
+      throw err;
+    }
+  } catch (err) {
+    console.warn('Background timetable sync failed:', err);
+  }
+}
 
 router.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
@@ -60,6 +106,8 @@ router.post('/api/login', async (req, res) => {
         return res.status(401).json({ error: 'Invalid parent credentials' });
       }
     }
+
+    let bgSync: { personId: number; untisAbsences: any[] } | null = null;
 
     const result = await withUntis(username, password, async (untis) => {
       const session = untis.sessionInformation;
@@ -121,6 +169,7 @@ router.post('/api/login', async (req, res) => {
         );
 
         db.complete(true);
+        bgSync = { personId, untisAbsences };
         return { token, role: 'student', absences };
       } catch (err) {
         db.complete(false);
@@ -129,6 +178,11 @@ router.post('/api/login', async (req, res) => {
     });
 
     res.json(result);
+
+    if (bgSync) {
+      const { personId, untisAbsences } = bgSync;
+      void syncStudentTimetableInBackground(username, password, personId, untisAbsences);
+    }
   } catch (error: any) {
     console.error('Login error:', error.message);
     res.status(401).json({ error: 'Invalid credentials' });

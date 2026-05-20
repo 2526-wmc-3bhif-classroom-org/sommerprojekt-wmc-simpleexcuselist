@@ -23,6 +23,12 @@ interface Attachment {
   fileData: string
 }
 
+interface SubjectStat {
+  subjectName: string
+  subjectLongName: string
+  missedLessons: number
+}
+
 const router = useRouter()
 const students = ref<Student[]>([])
 const selectedStudent = ref<Student | null>(null)
@@ -32,6 +38,13 @@ const loadingAbsences = ref(false)
 const error = ref('')
 const teacherName = ref('')
 const teacherClass = ref('')
+
+const showAnalytics = ref(false)
+const analytics = ref<SubjectStat[]>([])
+const loadingAnalytics = ref(false)
+const maxMissed = computed(() =>
+  analytics.value.reduce((m, s) => Math.max(m, s.missedLessons), 0)
+)
 
 // --- Attachments Modal ---
 const showAttachmentModal = ref(false)
@@ -81,6 +94,8 @@ const fetchStudents = async () => {
 const selectStudent = async (student: Student) => {
   selectedStudent.value = student
   absences.value = []
+  analytics.value = []
+  showAnalytics.value = false
   const token = getToken()
   if (!token) return
   loadingAbsences.value = true
@@ -98,6 +113,29 @@ const selectStudent = async (student: Student) => {
 }
 
 
+const fetchAnalytics = async () => {
+  if (!selectedStudent.value) return
+  const token = getToken()
+  if (!token) return
+  loadingAnalytics.value = true
+  try {
+    const res = await fetch(`/api/teacher/students/${selectedStudent.value.untisId}/analytics`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error(`Fehler (${res.status})`)
+    analytics.value = await res.json()
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Analyse'
+  } finally {
+    loadingAnalytics.value = false
+  }
+}
+
+const toggleAnalytics = () => {
+  showAnalytics.value = !showAnalytics.value
+  if (showAnalytics.value && analytics.value.length === 0) fetchAnalytics()
+}
+
 const showArchive = ref(false)
 
 const excuseAbsence = async (id: string) => {
@@ -109,7 +147,7 @@ const excuseAbsence = async (id: string) => {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error('Failed to excuse')
-    
+
     // update locally
     const absence = absences.value.find(a => a.id === id)
     if (absence) absence.status = 'excused'
@@ -184,7 +222,7 @@ onMounted(fetchStudents)
             <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Schüler</div>
             <div class="text-2xl font-black text-blue-600">{{ students.length }}</div>
           </div>
-          
+
           <button
             @click="showArchive = !showArchive"
             :class="[
@@ -287,11 +325,54 @@ onMounted(fetchStudents)
                   {{ showArchive ? 'Archivierte (entschuldigte) Absenzen' : 'Offene Entschuldigungen' }}
                 </p>
               </div>
-              <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                {{ showArchive ? archivedAbsences.length : activeAbsences.length }} Eintrag{{ (showArchive ? archivedAbsences : activeAbsences).length !== 1 ? 'e' : '' }}
-              </span>
+              <div class="flex items-center gap-3">
+                <button
+                  @click="toggleAnalytics"
+                  :class="[
+                    'px-4 py-2 rounded-lg font-bold uppercase text-xs transition',
+                    showAnalytics ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                  ]"
+                >
+                  {{ showAnalytics ? 'Absenzen' : 'Analyse' }}
+                </button>
+                <span v-if="!showAnalytics" class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                  {{ showArchive ? archivedAbsences.length : activeAbsences.length }} Eintrag{{ (showArchive ? archivedAbsences : activeAbsences).length !== 1 ? 'e' : '' }}
+                </span>
+              </div>
             </div>
 
+            <!-- Analytics -->
+            <div v-if="showAnalytics" class="flex-1 overflow-auto p-6">
+              <div v-if="loadingAnalytics" class="h-full flex items-center justify-center">
+                <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+              </div>
+              <div v-else-if="analytics.length === 0" class="h-full flex flex-col items-center justify-center text-center">
+                <div class="text-4xl mb-4">📊</div>
+                <h3 class="text-lg font-bold text-gray-900">Keine Daten</h3>
+                <p class="text-sm text-gray-400 mt-1">Für diesen Schüler wurden noch keine Stunden-Absenzen erfasst.</p>
+              </div>
+              <div v-else class="flex flex-col gap-3">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-2">Versäumte Stunden pro Fach</h3>
+                <div v-for="stat in analytics" :key="stat.subjectName" class="flex items-center gap-3">
+                  <div
+                    class="w-28 flex-shrink-0 text-right text-sm font-bold text-gray-700 truncate"
+                    :title="stat.subjectLongName || stat.subjectName"
+                  >
+                    {{ stat.subjectName }}
+                  </div>
+                  <div class="flex-1 bg-gray-100 rounded-lg h-7 overflow-hidden">
+                    <div
+                      class="h-full bg-blue-600 rounded-lg flex items-center justify-end px-2 transition-all"
+                      :style="{ width: maxMissed ? Math.max((stat.missedLessons / maxMissed) * 100, 8) + '%' : '0%' }"
+                    >
+                      <span class="text-xs font-black text-white">{{ stat.missedLessons }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <template v-else>
             <!-- Loading -->
             <div v-if="loadingAbsences" class="flex-1 flex items-center justify-center">
               <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
@@ -308,45 +389,42 @@ onMounted(fetchStudents)
             <div v-else class="flex-1 overflow-auto">
               <table class="w-full">
                 <thead class="bg-gray-50 border-b border-gray-100 sticky top-0">
-                  <tr>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
-                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
-<<<<<<< HEAD
-                    <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
-=======
-                    <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
-                    <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
->>>>>>> 94337ed22f277a8811b4da36b2e2bcfc9bc297fb
-                  </tr>
+                <tr>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
+                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
+                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
+                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
+                </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                  <tr v-for="absence in (showArchive ? archivedAbsences : activeAbsences)" :key="absence.id" class="hover:bg-gray-50 transition">
-                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
-                    <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
-                    <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
-                    <td class="px-6 py-4 text-center">
-<<<<<<< HEAD
-                      <button v-if="!showArchive" @click="excuseAbsence(absence.id)" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded uppercase tracking-wide transition">
-                        Entschuldigen
-                      </button>
-                      <span v-else class="text-xs font-bold text-gray-400 uppercase">Erledigt</span>
-=======
-                      <button @click="viewAttachments(absence)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
-                        Ansehen
-                      </button>
-                    </td>
-                    <td class="px-6 py-4 text-center">
+                <tr v-for="absence in (showArchive ? archivedAbsences : activeAbsences)" :key="absence.id" class="hover:bg-gray-50 transition">
+                  <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
+                  <td class="px-6 py-4 text-center">
+                    <button @click="viewAttachments(absence)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
+                      Ansehen
+                    </button>
+                  </td>
+                  <td class="px-6 py-4 text-center">
                       <span class="inline-flex items-center gap-1.5 text-green-700 text-xs font-bold">
                         <span class="w-2 h-2 rounded-full bg-green-600"></span>
                         Unterschrieben
                       </span>
->>>>>>> 94337ed22f277a8811b4da36b2e2bcfc9bc297fb
-                    </td>
-                  </tr>
+                  </td>
+                  <td class="px-6 py-4 text-center">
+                    <button v-if="!showArchive" @click="excuseAbsence(absence.id)" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded uppercase tracking-wide transition">
+                      Entschuldigen
+                    </button>
+                    <span v-else class="text-xs font-bold text-gray-400 uppercase">Erledigt</span>
+                  </td>
+                </tr>
                 </tbody>
               </table>
             </div>
+            </template>
           </template>
 
         </div>

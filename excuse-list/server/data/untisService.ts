@@ -19,6 +19,14 @@ export async function withUntis<T>(
   }
 }
 
+export async function fetchTimetableForRange(
+  untis: WebUntis,
+  start: Date,
+  end: Date,
+) {
+  return untis.getOwnTimetableForRange(start, end);
+}
+
 export async function fetchRandomFirstName(): Promise<string> {
   const res = await fetch('https://randomuser.me/api/?inc=name');
   const data = await res.json();

@@ -104,6 +104,7 @@ export class DB {
   private static rebuildDatabase(connection: Database): void {
     connection.pragma("foreign_keys = OFF");
     connection.exec(`
+      DROP TABLE IF EXISTS AbsenceLesson;
       DROP TABLE IF EXISTS Attachment;
       DROP TABLE IF EXISTS Excuse;
       DROP TABLE IF EXISTS StudentParent;
@@ -197,7 +198,23 @@ export class DB {
         teacherUntisId INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS AbsenceLesson
+      (
+        id              TEXT PRIMARY KEY,
+        studentUntisId  INTEGER NOT NULL,
+        untisLessonId   INTEGER NOT NULL,
+        date            INTEGER NOT NULL,
+        startTime       INTEGER NOT NULL,
+        endTime         INTEGER NOT NULL,
+        subjectName     TEXT NOT NULL,
+        subjectLongName TEXT NOT NULL DEFAULT '',
+        createdAt       TEXT DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
       CREATE INDEX IF NOT EXISTS idx_student_class ON Student(className);
+      CREATE INDEX IF NOT EXISTS idx_absencelesson_student ON AbsenceLesson(studentUntisId);
       CREATE INDEX IF NOT EXISTS idx_absence_student ON Absence(studentUntisId);
       CREATE INDEX IF NOT EXISTS idx_absence_status ON Absence(status);
       CREATE INDEX IF NOT EXISTS idx_studentparent_parent ON StudentParent(parentId);
