@@ -585,23 +585,6 @@ async function seedMockTeacher() {
 }
 
 
-app.post('/api/teacher/absences/:absenceId/excuse', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Auth missing' });
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, jwtSecret) as any;
-    if (decoded.role !== 'teacher') return res.status(403).json({ error: 'Forbidden' });
-    
-    const db = new Unit(false);
-    db.prepare("UPDATE Excuse SET status = 'excused' WHERE absenceId = ?").run(req.params.absenceId);
-    db.complete(true);
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.listen(port, async () => {
   console.log(`Server running at http://localhost:${port}`);
   await seedMockTeacher();

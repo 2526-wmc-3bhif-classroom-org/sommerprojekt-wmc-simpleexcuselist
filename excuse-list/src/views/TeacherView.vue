@@ -136,28 +136,7 @@ const toggleAnalytics = () => {
   if (showAnalytics.value && analytics.value.length === 0) fetchAnalytics()
 }
 
-const showArchive = ref(false)
-
-const excuseAbsence = async (id: string) => {
-  const token = getToken()
-  if (!token) return
-  try {
-    const res = await fetch(`/api/teacher/absences/${id}/excuse`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('Failed to excuse')
-
-    // update locally
-    const absence = absences.value.find(a => a.id === id)
-    if (absence) absence.status = 'excused'
-  } catch (err: any) {
-    error.value = err.message
-  }
-}
-
 const activeAbsences = computed(() => absences.value.filter(a => a.status === 'signed'))
-const archivedAbsences = computed(() => absences.value.filter(a => a.status === 'excused'))
 
 const formatDate =  (dateNum: number) => {
   const s = dateNum.toString()
@@ -223,15 +202,6 @@ onMounted(fetchStudents)
             <div class="text-2xl font-black text-blue-600">{{ students.length }}</div>
           </div>
 
-          <button
-            @click="showArchive = !showArchive"
-            :class="[
-              'px-5 py-3 rounded-xl font-bold uppercase text-sm transition',
-              showArchive ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-            ]"
-          >
-            {{ showArchive ? 'Offene Entschuldigungen' : 'Archiv (' + archivedAbsences.length + ')' }}
-          </button>
           <button
             @click="logout"
 
@@ -322,7 +292,7 @@ onMounted(fetchStudents)
                   {{ selectedStudent.firstName }} {{ selectedStudent.lastName }}
                 </h2>
                 <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-wide font-bold">
-                  {{ showArchive ? 'Archivierte (entschuldigte) Absenzen' : 'Offene Entschuldigungen' }}
+                  Offene Entschuldigungen
                 </p>
               </div>
               <div class="flex items-center gap-3">
@@ -336,7 +306,7 @@ onMounted(fetchStudents)
                   {{ showAnalytics ? 'Absenzen' : 'Analyse' }}
                 </button>
                 <span v-if="!showAnalytics" class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                  {{ showArchive ? archivedAbsences.length : activeAbsences.length }} Eintrag{{ (showArchive ? archivedAbsences : activeAbsences).length !== 1 ? 'e' : '' }}
+                  {{ activeAbsences.length }} Eintrag{{ activeAbsences.length !== 1 ? 'e' : '' }}
                 </span>
               </div>
             </div>
@@ -379,7 +349,7 @@ onMounted(fetchStudents)
             </div>
 
             <!-- Empty -->
-            <div v-else-if="(showArchive ? archivedAbsences : activeAbsences).length === 0" class="flex-1 flex flex-col items-center justify-center text-center px-8">
+            <div v-else-if="activeAbsences.length === 0" class="flex-1 flex flex-col items-center justify-center text-center px-8">
               <div class="text-4xl mb-4">✓</div>
               <h3 class="text-lg font-bold text-gray-900">Keine Einträge</h3>
               <p class="text-sm text-gray-400 mt-1">Es wurden keine entsprechenden Absenzen gefunden.</p>
@@ -395,11 +365,10 @@ onMounted(fetchStudents)
                   <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
                   <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
                   <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
-                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                <tr v-for="absence in (showArchive ? archivedAbsences : activeAbsences)" :key="absence.id" class="hover:bg-gray-50 transition">
+                <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50 transition">
                   <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
                   <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
                   <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
@@ -413,12 +382,6 @@ onMounted(fetchStudents)
                         <span class="w-2 h-2 rounded-full bg-green-600"></span>
                         Unterschrieben
                       </span>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <button v-if="!showArchive" @click="excuseAbsence(absence.id)" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded uppercase tracking-wide transition">
-                      Entschuldigen
-                    </button>
-                    <span v-else class="text-xs font-bold text-gray-400 uppercase">Erledigt</span>
                   </td>
                 </tr>
                 </tbody>

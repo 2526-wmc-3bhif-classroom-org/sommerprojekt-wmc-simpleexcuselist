@@ -24,7 +24,7 @@ export function getStudentSignedAbsences(studentId: string, className: string) {
   const absences = db.prepare(`
     SELECT id, date, startTime, endTime, status, excuseMessage
     FROM Absence
-    WHERE studentUntisId = ? AND status = 'signed'
+    WHERE studentUntisId = ? AND status = 'signed' AND isExcusedUntis = 0
     ORDER BY date DESC
   `).all(studentId);
   db.complete(null);
