@@ -42,9 +42,12 @@ const teacherClass = ref('')
 const showAnalytics = ref(false)
 const analytics = ref<SubjectStat[]>([])
 const loadingAnalytics = ref(false)
-const maxMissed = computed(() =>
-  analytics.value.reduce((m, s) => Math.max(m, s.missedLessons), 0)
-)
+
+const severityClass = (n: number) => {
+  if (n <= 2) return 'bg-green-100 text-green-700'
+  if (n <= 5) return 'bg-yellow-100 text-yellow-700'
+  return 'bg-red-100 text-red-700'
+}
 
 // --- Attachments Modal ---
 const showAttachmentModal = ref(false)
@@ -321,24 +324,30 @@ onMounted(fetchStudents)
                 <h3 class="text-lg font-bold text-gray-900">Keine Daten</h3>
                 <p class="text-sm text-gray-400 mt-1">Für diesen Schüler wurden noch keine Stunden-Absenzen erfasst.</p>
               </div>
-              <div v-else class="flex flex-col gap-3">
-                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-2">Versäumte Stunden pro Fach</h3>
-                <div v-for="stat in analytics" :key="stat.subjectName" class="flex items-center gap-3">
-                  <div
-                    class="w-28 flex-shrink-0 text-right text-sm font-bold text-gray-700 truncate"
-                    :title="stat.subjectLongName || stat.subjectName"
-                  >
-                    {{ stat.subjectName }}
-                  </div>
-                  <div class="flex-1 bg-gray-100 rounded-lg h-7 overflow-hidden">
-                    <div
-                      class="h-full bg-blue-600 rounded-lg flex items-center justify-end px-2 transition-all"
-                      :style="{ width: maxMissed ? Math.max((stat.missedLessons / maxMissed) * 100, 8) + '%' : '0%' }"
-                    >
-                      <span class="text-xs font-black text-white">{{ stat.missedLessons }}</span>
-                    </div>
-                  </div>
-                </div>
+              <div v-else>
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Versäumte Stunden pro Fach</h3>
+                <table class="w-full">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Fach</th>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bezeichnung</th>
+                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Versäumt</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-50">
+                    <tr v-for="stat in analytics" :key="stat.subjectName" class="hover:bg-gray-50 transition">
+                      <td class="px-6 py-3 text-sm font-bold text-gray-900">{{ stat.subjectName }}</td>
+                      <td class="px-6 py-3 text-sm text-gray-600">{{ stat.subjectLongName || '—' }}</td>
+                      <td class="px-6 py-3 text-right">
+                        <span
+                          :class="['inline-flex items-center justify-center min-w-[2.5rem] px-3 py-1 rounded-full text-sm font-black', severityClass(stat.missedLessons)]"
+                        >
+                          {{ stat.missedLessons }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
