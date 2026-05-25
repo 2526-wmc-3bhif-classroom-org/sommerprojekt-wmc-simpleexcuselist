@@ -30,7 +30,8 @@ export function syncAbsenceLessons(
   lessons: any[],
   absences: any[],
 ): number {
-  const normAbsences = normalizeAbsences(absences);
+  const openAbsences = absences.filter((a) => a.isExcused === false);
+  const normAbsences = normalizeAbsences(openAbsences);
 
   db.prepare(`DELETE FROM AbsenceLesson WHERE studentUntisId = ?`).run(studentUntisId);
 
