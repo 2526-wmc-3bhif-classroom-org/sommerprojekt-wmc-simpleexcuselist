@@ -89,3 +89,21 @@ export function getSubjectAbsenceStats(studentUntisId: number, className: string
   db.complete(null);
   return rows;
 }
+
+export function getClassAbsenceStats(className: string) {
+  const db = new Unit(true);
+  const rows = db
+    .prepare(`
+      SELECT al.subjectName,
+             MAX(al.subjectLongName) AS subjectLongName,
+             ROUND(COUNT(*) * 1.0 / (SELECT COUNT(*) FROM Student WHERE className = ?), 1) AS missedLessons
+      FROM AbsenceLesson al
+      JOIN Student s ON al.studentUntisId = s.untisId
+      WHERE s.className = ?
+      GROUP BY al.subjectName
+      ORDER BY missedLessons DESC, al.subjectName ASC
+    `)
+    .all(className, className);
+  db.complete(null);
+  return rows;
+}

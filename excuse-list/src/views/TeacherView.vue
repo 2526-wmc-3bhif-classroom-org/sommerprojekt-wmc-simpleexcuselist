@@ -43,6 +43,10 @@ const showAnalytics = ref(false)
 const analytics = ref<SubjectStat[]>([])
 const loadingAnalytics = ref(false)
 
+const showClassAnalytics = ref(false)
+const classAnalytics = ref<SubjectStat[]>([])
+const loadingClassAnalytics = ref(false)
+
 const severityClass = (n: number) => {
   if (n <= 2) return 'bg-green-100 text-green-700'
   if (n <= 5) return 'bg-yellow-100 text-yellow-700'
@@ -99,6 +103,7 @@ const selectStudent = async (student: Student) => {
   absences.value = []
   analytics.value = []
   showAnalytics.value = false
+  showClassAnalytics.value = false
   const token = getToken()
   if (!token) return
   loadingAbsences.value = true
@@ -137,6 +142,29 @@ const fetchAnalytics = async () => {
 const toggleAnalytics = () => {
   showAnalytics.value = !showAnalytics.value
   if (showAnalytics.value && analytics.value.length === 0) fetchAnalytics()
+}
+
+const toggleClassAnalytics = () => {
+  showClassAnalytics.value = true
+  selectedStudent.value = null
+  if (classAnalytics.value.length === 0) fetchClassAnalytics()
+}
+
+const fetchClassAnalytics = async () => {
+  const token = getToken()
+  if (!token) return
+  loadingClassAnalytics.value = true
+  try {
+    const res = await fetch(`/api/teacher/class/analytics`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error(`Fehler (${res.status})`)
+    classAnalytics.value = await res.json()
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Klassen-Analyse'
+  } finally {
+    loadingClassAnalytics.value = false
+  }
 }
 
 const activeAbsences = computed(() => absences.value.filter(a => a.status === 'signed'))
@@ -200,6 +228,16 @@ onMounted(fetchStudents)
           </p>
         </div>
         <div class="flex items-center gap-4">
+          <button
+            @click="toggleClassAnalytics"
+            :class="[
+              'px-5 py-3 rounded-xl font-bold uppercase text-sm transition',
+              showClassAnalytics ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+            ]"
+          >
+            Klassen-Analyse
+          </button>
+          
           <div class="bg-white rounded-xl px-6 py-3 shadow-sm border border-gray-200 text-right">
             <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Schüler</div>
             <div class="text-2xl font-black text-blue-600">{{ students.length }}</div>
@@ -275,8 +313,52 @@ onMounted(fetchStudents)
         <!-- Right: Absences Panel -->
         <div class="flex-1 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
 
+          <!-- Class Analytics View -->
+          <template v-if="showClassAnalytics">
+            <div class="px-6 py-5 border-b border-gray-100">
+              <h2 class="text-xl font-black text-gray-900">Klassen-Analyse</h2>
+              <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-wide font-bold">
+                Durchschnittlich versäumte Stunden der Klasse
+              </p>
+            </div>
+            <div class="flex-1 overflow-auto p-6">
+              <div v-if="loadingClassAnalytics" class="h-full flex items-center justify-center">
+                <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+              </div>
+              <div v-else-if="classAnalytics.length === 0" class="h-full flex flex-col items-center justify-center text-center">
+                <div class="text-4xl mb-4">📊</div>
+                <h3 class="text-lg font-bold text-gray-900">Keine Daten</h3>
+                <p class="text-sm text-gray-400 mt-1">Es wurden noch keine Absenzen für diese Klasse erfasst.</p>
+              </div>
+              <div v-else>
+                <table class="w-full">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Fach</th>
+                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bezeichnung</th>
+                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Ø Versäumt</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-50">
+                    <tr v-for="stat in classAnalytics" :key="stat.subjectName" class="hover:bg-gray-50 transition">
+                      <td class="px-6 py-3 text-sm font-bold text-gray-900">{{ stat.subjectName }}</td>
+                      <td class="px-6 py-3 text-sm text-gray-600">{{ stat.subjectLongName || '—' }}</td>
+                      <td class="px-6 py-3 text-right">
+                        <span
+                          :class="['inline-flex items-center justify-center min-w-[2.5rem] px-3 py-1 rounded-full text-sm font-black', severityClass(stat.missedLessons)]"
+                        >
+                          {{ stat.missedLessons }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </template>
+
           <!-- No student selected -->
-          <div v-if="!selectedStudent" class="flex-1 flex flex-col items-center justify-center text-center px-8">
+          <div v-else-if="!selectedStudent" class="flex-1 flex flex-col items-center justify-center text-center px-8">
             <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
               <svg class="w-8 h-8 text-blue-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />

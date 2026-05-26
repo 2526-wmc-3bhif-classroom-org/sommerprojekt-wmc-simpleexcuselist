@@ -6,6 +6,7 @@ import { WebUntis } from 'webuntis';
 import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
 import {Unit} from "../data/unit";
+import { getClassAbsenceStats } from "./data/analyticsRepository";
 
 export interface Parent {
   id: string;
@@ -551,6 +552,27 @@ app.get('/api/teacher/students/:studentId/absences', async (req, res) => {
   } catch (error: any) {
     console.error('Error fetching student absences:', error.message);
     res.status(500).json({ error: 'Error fetching absences', details: error.message });
+  }
+});
+
+app.get('/api/teacher/class/analytics', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header missing' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as any;
+    if (decoded.role !== 'teacher') {
+      return res.status(403).json({ error: 'Forbidden: Teacher role required' });
+    }
+
+    const stats = getClassAbsenceStats(decoded.className);
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Error fetching class analytics:', error.message);
+    res.status(500).json({ error: 'Error fetching class analytics', details: error.message });
   }
 });
 

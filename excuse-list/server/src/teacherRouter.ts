@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { verifyJwt } from '../middleware/auth';
 import { requireTeacher } from '../middleware/roleGuard';
 import { getStudentsByClass, getStudentSignedAbsences } from '../data/teacherRepository';
-import { getSubjectAbsenceStats } from '../data/analyticsRepository';
+import { getSubjectAbsenceStats, getClassAbsenceStats } from '../data/analyticsRepository';
 
 const router = Router();
 
@@ -44,6 +44,16 @@ router.get('/api/teacher/students/:studentId/analytics', verifyJwt, requireTeach
   } catch (error: any) {
     console.error('Error fetching student analytics:', error.message);
     res.status(500).json({ error: 'Error fetching analytics', details: error.message });
+  }
+});
+
+router.get('/api/teacher/class/analytics', verifyJwt, requireTeacher, async (req, res) => {
+  try {
+    const stats = getClassAbsenceStats(req.user!.className!);
+    res.json(stats);
+  } catch (error: any) {
+    console.error('Error fetching class analytics:', error.message);
+    res.status(500).json({ error: 'Error fetching class analytics', details: error.message });
   }
 });
 
