@@ -30,8 +30,7 @@ export function syncAbsenceLessons(
   lessons: any[],
   absences: any[],
 ): number {
-  const openAbsences = absences.filter((a) => a.isExcused === false);
-  const normAbsences = normalizeAbsences(openAbsences);
+  const normAbsences = normalizeAbsences(absences);
 
   db.prepare(`DELETE FROM AbsenceLesson WHERE studentUntisId = ?`).run(studentUntisId);
 
@@ -89,3 +88,5 @@ export function getSubjectAbsenceStats(studentUntisId: number, className: string
   db.complete(null);
   return rows;
 }
+
+

@@ -66,7 +66,10 @@ const getToken = () => {
 
 const decodeToken = (token: string) => {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')))
+    const base64Url = token.split('.')[1]!;
+    const padLength = (4 - (base64Url.length % 4)) % 4;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLength);
+    const payload = JSON.parse(atob(base64));
     teacherName.value = payload.username || ''
     teacherClass.value = payload.className || ''
   } catch {}
@@ -136,7 +139,7 @@ const fetchAnalytics = async () => {
 
 const toggleAnalytics = () => {
   showAnalytics.value = !showAnalytics.value
-  if (showAnalytics.value && analytics.value.length === 0) fetchAnalytics()
+  if (showAnalytics.value) fetchAnalytics()
 }
 
 const activeAbsences = computed(() => absences.value.filter(a => a.status === 'signed'))
@@ -197,14 +200,6 @@ onMounted(fetchStudents)
         <h1 class="text-xl font-bold text-gray-900 tracking-tight">Klasse <span class="text-primary">{{ teacherClass }}</span></h1>
       </div>
 
-      <!-- Sidebar Tools -->
-      <div class="p-4 border-b border-gray-100 bg-gray-50/50">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Schülerliste</span>
-          <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ students.length }}</span>
-        </div>
-      </div>
-
       <!-- Student List -->
       <div class="flex-1 overflow-y-auto w-full">
         <!-- Loading -->
@@ -243,8 +238,8 @@ onMounted(fetchStudents)
       <!-- Sidebar Footer (Logout) -->
       <div class="p-4 border-t border-gray-200 bg-white">
         <div class="flex items-center mb-3 px-2">
-          <div class="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-xs uppercase mr-3">
-            {{ teacherName.substring(0, 2) }}
+          <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 mr-3 flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
           </div>
           <div class="text-sm font-semibold text-gray-700 truncate">{{ teacherName }}</div>
         </div>
@@ -265,110 +260,125 @@ onMounted(fetchStudents)
           <span v-if="selectedStudent" class="font-semibold text-gray-900">
             {{ selectedStudent.firstName }} {{ selectedStudent.lastName }}
           </span>
+          <span v-else-if="showClassAnalytics" class="font-semibold text-gray-900">
+            Klassenanalyse
+          </span>
           <span v-else>Bitte Schüler auswählen</span>
         </div>
       </header>
 
       <!-- Scrollable content -->
-      <div class="flex-1 overflow-auto p-8 relative">
-        <div v-if="!selectedStudent" class="h-full flex flex-col items-center justify-center opacity-50">
+      <div class="flex-1 p-8 flex flex-col min-h-0 relative">
+        <div v-if="!selectedStudent" class="flex-grow flex flex-col items-center justify-center opacity-50">
           <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
           </svg>
           <p class="text-gray-500 text-lg">Wählen Sie einen Schüler links aus</p>
         </div>
 
-        <div v-else class="max-w-5xl mx-auto">
+        <div v-else class="flex-grow flex flex-col min-h-0 w-full">
           <!-- Main Toolbar for Student -->
-          <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">Offene Entschuldigungen</h2>
-            <div class="flex space-x-2 bg-white rounded-md border border-gray-200 p-1 shadow-sm">
-              <button
-                @click="showAnalytics = false"
-                :class="['px-4 py-1.5 text-sm font-semibold rounded', !showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']"
-              >
-                Liste
-              </button>
-              <button
-                @click="showAnalytics = true; if(analytics.length===0) fetchAnalytics();"
-                :class="['px-4 py-1.5 text-sm font-semibold rounded', showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']"
-              >
-                Analyse
-              </button>
+          <div class="flex items-center justify-between mb-6 flex-shrink-0">
+            <h2 class="text-2xl font-bold text-gray-900">
+              Offene Entschuldigungen
+            </h2>
+            <div class="flex items-center space-x-4">
+              <!-- View toggle (Liste/Analyse) -->
+              <div class="flex space-x-2 bg-white rounded-md border border-gray-200 p-1 shadow-sm">
+                <button
+                  @click="showAnalytics = false"
+                  :class="['px-4 py-1.5 text-sm font-semibold rounded cursor-pointer transition-colors', !showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']"
+                >
+                  Liste
+                </button>
+                <button
+                  @click="toggleAnalytics"
+                  :class="['px-4 py-1.5 text-sm font-semibold rounded cursor-pointer transition-colors', showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']"
+                >
+                  Analyse
+                </button>
+              </div>
             </div>
           </div>
 
           <!-- Content Card -->
-          <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <!-- Analytics View -->
-            <div v-if="showAnalytics">
-               <div v-if="loadingAnalytics" class="p-12 flex justify-center">
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+            <!-- Student Analytics View -->
+            <div v-if="showAnalytics" class="flex-1 flex flex-col min-h-0">
+               <div v-if="loadingAnalytics" class="p-12 flex-grow flex items-center justify-center">
                  <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
                </div>
-               <div v-else-if="analytics.length === 0" class="p-12 text-center text-gray-500">
-                 Keine Daten vorhanden.
+                <div v-else-if="analytics.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center text-center">
+                  <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  </div>
+                  <p class="text-gray-500 text-sm font-medium">Keine Fehlstunden in der Analyse vorhanden.</p>
+                </div>
+               <div v-else class="flex-grow overflow-y-auto min-h-0">
+                 <table class="w-full text-sm text-left border-collapse">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold w-1/4">Fach</th>
+                        <th class="px-6 py-3 font-semibold">Bezeichnung</th>
+                        <th class="px-6 py-3 font-semibold text-right w-1/4">Versäumt</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="stat in analytics" :key="stat.subjectName" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ stat.subjectName }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ stat.subjectLongName || '—' }}</td>
+                        <td class="px-6 py-4 text-right">
+                          <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', severityClass(stat.missedLessons)]">
+                            {{ stat.missedLessons }}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                 </table>
                </div>
-               <table v-else class="w-full text-sm text-left">
-                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
-                    <tr>
-                      <th class="px-6 py-3 font-semibold w-1/4">Fach</th>
-                      <th class="px-6 py-3 font-semibold">Bezeichnung</th>
-                      <th class="px-6 py-3 font-semibold text-right w-1/4">Versäumt</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <tr v-for="stat in analytics" :key="stat.subjectName" class="hover:bg-gray-50/50">
-                      <td class="px-6 py-4 font-medium text-gray-900">{{ stat.subjectName }}</td>
-                      <td class="px-6 py-4 text-gray-600">{{ stat.subjectLongName || '—' }}</td>
-                      <td class="px-6 py-4 text-right">
-                        <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', severityClass(stat.missedLessons)]">
-                          {{ stat.missedLessons }}
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-               </table>
             </div>
 
-            <!-- List View -->
-            <div v-else>
-               <div v-if="loadingAbsences" class="p-12 flex justify-center">
+            <!-- List View (Student Absences) -->
+            <div v-else class="flex-1 flex flex-col min-h-0">
+               <div v-if="loadingAbsences" class="p-12 flex-grow flex items-center justify-center">
                  <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
                </div>
-               <div v-else-if="activeAbsences.length === 0" class="p-12 flex flex-col items-center">
+               <div v-else-if="activeAbsences.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center">
                   <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
                     <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                   </div>
                   <p class="text-gray-500 text-sm font-medium">Alle Absenzen wurden bearbeitet.</p>
                </div>
-               <table v-else class="w-full text-sm text-left">
-                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
-                    <tr>
-                      <th class="px-6 py-3 font-semibold">Datum</th>
-                      <th class="px-6 py-3 font-semibold">Von</th>
-                      <th class="px-6 py-3 font-semibold">Bis</th>
-                      <th class="px-6 py-3 font-semibold text-center">Status</th>
-                      <th class="px-6 py-3 font-semibold text-right">Aktion</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
-                      <td class="px-6 py-4 font-medium text-gray-900">{{ formatDate(absence.date) }}</td>
-                      <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
-                      <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
-                      <td class="px-6 py-4 text-center">
-                        <span class="inline-flex items-center gap-1.5 text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-semibold border border-green-200">
-                          Unterschrieben
-                        </span>
-                      </td>
-                      <td class="px-6 py-4 text-right">
-                        <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">
-                          Ansehen
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-               </table>
+               <div v-else class="flex-grow overflow-y-auto min-h-0">
+                 <table class="w-full text-sm text-left border-collapse">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold">Datum</th>
+                        <th class="px-6 py-3 font-semibold">Von</th>
+                        <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold text-center">Status</th>
+                        <th class="px-6 py-3 font-semibold text-right">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-center">
+                          <span class="inline-flex items-center gap-1.5 text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-semibold border border-green-200">
+                            Unterschrieben
+                          </span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                          <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">
+                            Ansehen
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                 </table>
+               </div>
             </div>
           </div>
 
