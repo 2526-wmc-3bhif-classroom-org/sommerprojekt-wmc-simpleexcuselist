@@ -148,196 +148,172 @@ const submitExcuse = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen px-6 py-8">
-    <div class="max-w-[1600px] mx-auto">
-      <!-- Header -->
-      <div class="mb-8 flex justify-between items-start">
+  <div class="min-h-screen w-full bg-[#f4f5f7] flex flex-col font-sans">
+
+    <header class="bg-primary/95 text-white shadow-sm flex items-center justify-between px-6 py-3">
+      <div class="flex items-center gap-4">
+        <div class="bg-white/20 p-2 rounded text-white font-bold tracking-widest text-xs uppercase">
+          Excuses
+        </div>
+        <h1 class="text-xl font-semibold tracking-tight">Schüler-Dashboard</h1>
+      </div>
+      <div>
+        <button @click="logout" class="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded transition text-sm font-semibold">
+          Abmelden
+        </button>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-5xl w-full mx-auto p-6 md:p-10">
+
+      <div class="flex justify-between items-end mb-6">
         <div>
-          <h1 class="text-4xl font-black text-gray-900 uppercase tracking-tight">Meine Fehlstunden</h1>
-          <p class="text-gray-500 text-sm mt-2">Unentschuldigte Absenzen</p>
+          <h2 class="text-2xl font-bold text-gray-900 tracking-tight">Meine Fehlstunden</h2>
+          <p class="text-gray-500 text-sm mt-1">Ganz einfach unentschuldigte Absenzen nachreichen.</p>
         </div>
-        <div class="text-right bg-white rounded-xl px-6 py-4 shadow-sm border border-gray-200">
-          <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Offen</div>
-          <div class="text-3xl font-black text-blue-600">{{ absences.length }}</div>
+        <div class="flex gap-2">
+          <button @click="fetchAbsences" class="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-semibold px-4 py-2 text-sm rounded shadow-sm hover:bg-gray-50 transition">
+            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Aktualisieren
+          </button>
         </div>
       </div>
 
-      <div class="space-y-6">
-        <div v-if="loading" class="flex justify-center py-16">
-          <div class="text-center">
-            <div class="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-            <p class="text-gray-500">Wird geladen...</p>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+
+        <div v-if="loading" class="flex justify-center p-12">
+          <div class="w-8 h-8 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+        </div>
+
+        <div v-else-if="error" class="p-8 bg-red-50 border-l-4 border-red-500 text-red-900">
+          <h3 class="font-bold">Fehler beim Laden</h3>
+          <p class="text-sm mt-1">{{ error }}</p>
+        </div>
+
+        <div v-else-if="absences.length === 0" class="p-16 flex flex-col items-center text-center">
+          <div class="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
+            <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
           </div>
+          <h3 class="text-xl font-bold text-gray-900">Alles erledigt!</h3>
+          <p class="text-gray-500 text-sm mt-1">Du hast keine unentschuldigten Fehlstunden. Super!</p>
         </div>
 
-        <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl px-6 py-4">
-          <p class="font-bold text-red-900">Fehler beim Laden</p>
-          <p class="text-sm text-red-700 mt-1">{{ error }}</p>
-        </div>
-
-        <div v-else-if="absences.length === 0" class="bg-white rounded-xl px-8 py-12 text-center shadow-sm border border-gray-200">
-          <div class="text-4xl mb-4">✓</div>
-          <h2 class="text-2xl font-bold text-green-600">Keine offenen Fehlstunden</h2>
-          <p class="text-gray-500 mt-2">Super! Es liegen aktuell keine unentschuldigten Fehlstunden vor.</p>
-        </div>
-
-        <div v-else class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <table class="w-full">
-            <thead class="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">#</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
-              <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
-            </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-            <tr v-for="(absence, index) in absences" :key="absence.id" class="hover:bg-blue-50/50 transition">
-              <td class="px-6 py-4 font-bold text-gray-900">{{ index + 1 }}</td>
-              <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(absence.date) }}</td>
-              <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
-              <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
-              <td class="px-6 py-4 text-center">
-                <button
-                  @click="openModal(absence)"
-                  class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition"
-                >
-                  Einreichen
-                </button>
-              </td>
-            </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="flex justify-between gap-4 pt-4">
-          <button @click="logout" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-3 rounded-lg font-bold uppercase text-sm transition">Logout</button>
-          <button @click="fetchAbsences" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold uppercase text-sm transition">Aktualisieren</button>
-        </div>
+        <table v-else class="w-full text-left text-sm whitespace-nowrap">
+          <thead class="bg-gray-50 text-gray-600 border-b border-gray-200 uppercase tracking-wider text-xs">
+          <tr>
+            <th class="px-6 py-4 font-semibold w-12 text-center">#</th>
+            <th class="px-6 py-4 font-semibold">Datum</th>
+            <th class="px-6 py-4 font-semibold">Zeitraum</th>
+            <th class="px-6 py-4 font-semibold text-right">Aktion</th>
+          </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+          <tr v-for="(absence, index) in absences" :key="absence.id" class="hover:bg-gray-50/50">
+            <td class="px-6 py-4 text-center font-medium text-gray-500">{{ index + 1 }}</td>
+            <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+            <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} - {{ formatTime(absence.endTime) }} Uhr</td>
+            <td class="px-6 py-4 text-right">
+              <button
+                @click="openModal(absence)"
+                class="bg-white border border-gray-300 text-gray-800 hover:border-primary hover:text-primary px-4 py-1.5 rounded font-semibold transition"
+              >
+                Entschuldigen
+              </button>
+            </td>
+          </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
+    </main>
 
-    <!-- ====== EXCUSE MODAL ====== -->
-    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeModal">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4" @click.self="closeModal">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden border border-gray-200">
 
-        <!-- Success State -->
-        <div v-if="submitSuccess" class="flex flex-col items-center gap-4 px-8 py-12 text-center">
-          <div class="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
+        <div v-if="submitSuccess" class="flex flex-col items-center gap-4 px-8 py-10 text-center">
+          <div class="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center">
             <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
             </svg>
           </div>
           <div>
-            <p class="text-lg font-bold text-gray-900">Entschuldigung eingereicht</p>
-            <p class="text-sm text-gray-500 mt-1">Dein Elternteil/Aufseher wurde benachrichtigt und kann sich die Entschuldigung ansehen</p>
+            <p class="text-lg font-bold text-gray-900">Eingereicht!</p>
+            <p class="text-sm text-gray-500 mt-1 pb-4 border-b border-gray-100">Dein Formular wurde deinem Elternteil/Aufseher zur Unterschrift weitergeleitet.</p>
           </div>
-          <button @click="closeModal" class="mt-2 bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-2 rounded-lg font-bold text-sm uppercase transition">Schließen</button>
+          <button @click="closeModal" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-2 rounded text-sm font-semibold transition">Schließen</button>
         </div>
 
-        <!-- Form State -->
-        <template v-else>
-          <!-- Modal Header -->
-          <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-              </div>
-              <div>
-                <p class="font-bold text-gray-900 text-sm">Entschuldigung einreichen</p>
-                <p class="text-xs text-gray-400">
-                  {{ activeAbsence ? `${formatDate(activeAbsence.date)} · ${formatTime(activeAbsence.startTime)} – ${formatTime(activeAbsence.endTime)}` : '' }}
-                </p>
-              </div>
-            </div>
-            <button @click="closeModal" class="text-gray-400 hover:text-gray-600 transition p-1 rounded-lg hover:bg-gray-100">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
+        <div v-else>
+          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50">
+            <h3 class="font-bold text-gray-900">
+              Absenz entschuldigen
+              <span class="block text-xs font-normal text-gray-500 mt-0.5">
+                {{ activeAbsence ? `${formatDate(activeAbsence.date)} · ${formatTime(activeAbsence.startTime)} – ${formatTime(activeAbsence.endTime)}` : '' }}
+              </span>
+            </h3>
+            <button @click="closeModal" class="text-gray-400 hover:text-gray-600 transition p-1 rounded hover:bg-gray-200">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
 
-          <!-- Modal Body -->
-          <div class="px-6 py-5 space-y-5">
-            <!-- Message -->
-            <div>
-              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Nachricht / Begründung <span class="text-red-500">*</span></label>
+          <div class="p-6">
+            <div class="mb-5">
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">Begründung <span class="text-red-500">*</span></label>
               <textarea
                 v-model="excuseMessage"
-                rows="4"
-                placeholder="z. B. Mein Kind war wegen einer Erkältung krank und konnte nicht am Unterricht teilnehmen."
-                :class="['w-full text-sm border rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:border-transparent text-gray-700 placeholder-gray-300', excuseMessageError ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 focus:ring-blue-500']"
+                rows="3"
+                placeholder="Bitte hier die Begründung für die Abwesenheit eintragen..."
+                :class="['w-full text-sm border rounded px-3 py-2 resize-none focus:outline-none focus:ring-1 text-gray-800 placeholder-gray-400 shadow-sm', excuseMessageError ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-primary focus:border-primary']"
                 @input="excuseMessageError = false"
               />
-              <p v-if="excuseMessageError" class="text-xs text-red-500 mt-1 font-semibold">Bitte gib eine Begründung ein.</p>
             </div>
 
-            <!-- File Upload -->
             <div>
-              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                Anhang <span class="font-normal text-gray-400 normal-case">(optional)</span>
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                Anhänge <span class="text-gray-400 font-normal">(optional, z.B. Arztzeugnis)</span>
               </label>
               <div
-                class="border-2 border-dashed border-gray-200 rounded-xl px-4 py-6 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/50 transition"
+                class="border border-dashed border-gray-300 rounded px-4 py-4 text-center cursor-pointer hover:border-primary hover:bg-blue-50/10 transition bg-gray-50/50"
                 @click="fileInputRef?.click()"
                 @dragover.prevent
                 @drop="onDrop"
               >
-                <svg class="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                </svg>
-                <p class="text-sm text-gray-500">Datei hier ablegen oder <span class="text-blue-600 font-semibold">auswählen</span></p>
-                <p class="text-xs text-gray-400 mt-1">PDF, JPG, PNG – max. 10 MB</p>
+                <p class="text-sm text-gray-600">Datei hierher ziehen oder <span class="text-primary font-semibold">durchsuchen</span></p>
               </div>
               <input ref="fileInputRef" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple class="hidden" @change="onFileChange" />
 
-              <!-- File List -->
-              <div v-if="excuseFiles.length > 0" class="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
+              <div v-if="excuseFiles.length > 0" class="mt-3 space-y-2 max-h-32 overflow-y-auto">
                 <div
                   v-for="(file, i) in excuseFiles"
                   :key="i"
-                  class="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100"
+                  class="flex items-center gap-3 px-3 py-1.5 bg-white rounded border border-gray-200 shadow-sm"
                 >
-                  <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                  </svg>
+                  <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                   <span class="text-sm text-gray-700 flex-1 truncate">{{ file.name }}</span>
-                  <span class="text-xs text-gray-400 flex-shrink-0">{{ (file.size / 1024).toFixed(0) }} KB</span>
-                  <button @click="removeFile(i)" class="text-gray-300 hover:text-red-500 transition flex-shrink-0">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+                  <button @click="removeFile(i)" class="text-gray-400 hover:text-red-500 transition px-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Modal Footer -->
-          <div class="px-6 py-4 border-t border-gray-100 flex gap-3">
-            <button @click="closeModal" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm uppercase transition">
+          <div class="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2">
+            <button @click="closeModal" class="px-4 py-1.5 bg-white border border-gray-300 rounded text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm">
               Abbrechen
             </button>
             <button
               @click="submitExcuse"
               :disabled="submitting"
-              class="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl font-bold text-sm uppercase transition flex items-center justify-center gap-2"
+              class="px-4 py-1.5 bg-primary text-white rounded text-sm font-semibold hover:bg-primary/90 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <svg v-if="submitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-              </svg>
-              {{ submitting ? 'Wird gesendet…' : 'Einreichen' }}
+              <svg v-if="submitting" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              {{ submitting ? 'Speichern...' : 'Einreichen' }}
             </button>
           </div>
-        </template>
+        </div>
 
       </div>
     </div>
-    <!-- ====== END MODAL ====== -->
 
   </div>
 </template>

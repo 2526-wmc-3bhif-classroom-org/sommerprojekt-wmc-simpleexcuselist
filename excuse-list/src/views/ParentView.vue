@@ -1,466 +1,465 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-interface Excuse {
-  absenceId: string;
-  excuseStatus: string;
-  date: number;
-  startTime: number;
-  endTime: number;
-  studentFirstName: string;
-  studentLastName: string;
-  excuseMessage?: string;
+interface Absence {
+  id: string
+  untisId: number
+  date: number
+  startTime: number
+  endTime: number
+  isExcusedUntis: number
+  status: string
 }
 
-interface Attachment {
-  fileName: string;
-  fileData: string;
-}
+const absences = ref<Absence[]>([])
+const loading = ref(true)
+const error = ref('')
+const router = useRouter()
 
-const excuses = ref<Excuse[]>([]);
-const loading = ref(true);
-const error = ref('');
-const router = useRouter();
-
-// Signature Modal State
-const showSignatureModal = ref(false);
-const activeExcuseId = ref<string | null>(null);
-const signatureCanvas = ref<HTMLCanvasElement | null>(null);
-const isDrawing = ref(false);
-let ctx: CanvasRenderingContext2D | null = null;
-let lastX = 0;
-let lastY = 0;
-
-// --- Attachments Modal State ---
-const showAttachmentModal = ref(false);
-const loadingAttachments = ref(false);
-const activeAttachments = ref<Attachment[]>([]);
-const activeExcuseMessage = ref('');
-
-const fetchExcuses = async () => {
-  const token = localStorage.getItem('untis_jwt');
-  if (!token) {
-    router.push('/');
-    return;
-  }
-  loading.value = true;
-  error.value = '';
-
-  try {
-    const res = await fetch('/api/parent/excuses', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    if (!res.ok) {
-      if (res.status === 401) {
-        localStorage.removeItem('untis_jwt');
-        router.push('/');
-        return;
-      }
-      throw new Error(`Fehler beim Laden (${res.status})`);
-    }
-
-    const data = await res.json();
-    excuses.value = data;
-  } catch (err: any) {
-    error.value = err.message || 'Fehler beim Laden der Einträge';
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(() => {
-  fetchExcuses();
-});
+// --- Modal State ---
+const showModal = ref(false)
+const activeAbsence = ref<Absence | null>(null)
+const excuseMessage = ref('')
+const excuseMessageError = ref(false)
+const excuseFiles = ref<File[]>([])
+const submitting = ref(false)
+const submitSuccess = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const formatDate = (dateNum: number) => {
-  if (!dateNum) return 'N/A';
-  const dateStr = dateNum.toString();
-  const year = dateStr.substring(0, 4);
-  const month = dateStr.substring(4, 6);
-  const day = dateStr.substring(6, 8);
-  return `${day}.${month}.${year}`;
-};
+  if (!dateNum) return 'N/A'
+  const s = dateNum.toString()
+  return `${s.substring(6, 8)}.${s.substring(4, 6)}.${s.substring(0, 4)}`
+}
 
 const formatTime = (timeNum: number) => {
-  const timeStr = timeNum.toString().padStart(4, '0');
-  const hours = timeStr.substring(0, 2);
-  const minutes = timeStr.substring(2, 4);
-  return `${hours}:${minutes}`;
-};
+  const s = timeNum.toString().padStart(4, '0')
+  return `${s.substring(0, 2)}:${s.substring(2, 4)}`
+}
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return 'badge badge-warning';
-    case 'signed':
-      return 'badge badge-success';
-    case 'rejected':
-      return 'badge badge-error';
-    default:
-      return 'badge';
-  }
-};
-
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return 'Ausstehend';
-    case 'signed':
-      return 'Unterzeichnet';
-    case 'rejected':
-      return 'Abgelehnt';
-    default:
-      return status;
-  }
-};
-
-const viewAttachments = async (excuse: Excuse) => {
-  activeExcuseMessage.value = excuse.excuseMessage || '';
-  activeAttachments.value = [];
-  showAttachmentModal.value = true;
-
-  const token = localStorage.getItem('untis_jwt');
-  if (!token) return;
-
-  loadingAttachments.value = true;
-  try {
-    const res = await fetch(`/api/absences/${excuse.absenceId}/attachments`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (res.ok) {
-      activeAttachments.value = await res.json();
-    }
-  } catch (e) {
-    console.error(e);
-  } finally {
-    loadingAttachments.value = false;
-  }
-};
-
-const closeAttachmentModal = () => {
-  showAttachmentModal.value = false;
-  activeAttachments.value = [];
-  activeExcuseMessage.value = '';
-};
-
-// Canvas Drawing Logic
-const startDrawing = (e: MouseEvent | TouchEvent) => {
-  isDrawing.value = true;
-  const canvas = signatureCanvas.value;
-  if (!canvas) return;
-  const rect = canvas.getBoundingClientRect();
-
-  if (e instanceof MouseEvent) {
-    lastX = e.clientX - rect.left;
-    lastY = e.clientY - rect.top;
-  } else if (e instanceof TouchEvent) {
-    const touch = e.touches[0];
-    if (touch) {
-      lastX = touch.clientX - rect.left;
-      lastY = touch.clientY - rect.top;
-    }
-  }
-};
-
-const draw = (e: MouseEvent | TouchEvent) => {
-  if (!isDrawing.value || !ctx) return;
-  e.preventDefault();
-  const canvas = signatureCanvas.value;
-  if (!canvas) return;
-  const rect = canvas.getBoundingClientRect();
-
-  let currentX, currentY;
-  if (e instanceof MouseEvent) {
-    currentX = e.clientX - rect.left;
-    currentY = e.clientY - rect.top;
-  } else if (e instanceof TouchEvent) {
-    const touch = e.touches[0];
-    if (!touch) return;
-    currentX = touch.clientX - rect.left;
-    currentY = touch.clientY - rect.top;
-  } else {
-    return;
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(lastX, lastY);
-  ctx.lineTo(currentX, currentY);
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-
-  lastX = currentX;
-  lastY = currentY;
-};
-
-const stopDrawing = () => {
-  isDrawing.value = false;
-};
-
-const initCanvas = () => {
-  if (signatureCanvas.value) {
-    ctx = signatureCanvas.value.getContext('2d');
-    // Clear canvas
-    if (ctx) {
-      ctx.clearRect(0, 0, signatureCanvas.value.width, signatureCanvas.value.height);
-    }
-  }
-};
-
-const clearSignature = () => {
-  if (ctx && signatureCanvas.value) {
-    ctx.clearRect(0, 0, signatureCanvas.value.width, signatureCanvas.value.height);
-  }
-};
-
-const openSignatureModal = (excuseId: string) => {
-  activeExcuseId.value = excuseId;
-  showSignatureModal.value = true;
-  // Initialize canvas after a short delay so DOM can render modal
-  setTimeout(() => {
-    initCanvas();
-  }, 50);
-};
-
-const closeSignatureModal = () => {
-  showSignatureModal.value = false;
-  activeExcuseId.value = null;
-};
-
-const confirmSignature = async () => {
-  if (!activeExcuseId.value) return;
-
-  // Here we could get the signature image: canvas.toDataURL()
-  // But for now, we just proceed to call the signExcuse API
-  await signExcuse(activeExcuseId.value);
-  closeSignatureModal();
-};
-
-const signExcuse = async (excuseId: string) => {
-  const token = localStorage.getItem('untis_jwt');
+const fetchAbsences = async () => {
+  const token = localStorage.getItem('untis_jwt')
   if (!token) {
-    router.push('/');
-    return;
+    router.push('/')
+    return
   }
-
+  loading.value = true
+  error.value = ''
   try {
-    const res = await fetch(`/api/parent/absences/${excuseId}/sign`, {
-       method: 'POST',
-       headers: {
-         'Content-Type': 'application/json',
-         Authorization: `Bearer ${token}`
-       },
-       // if we wanted to pass signature: body: JSON.stringify({ signature: signatureCanvas.value?.toDataURL() })
-    });
-
-    if(!res.ok) throw new Error('Fehler beim Unterzeichnen');
-
-    // Remove locally
-    excuses.value = excuses.value.filter(e => e.absenceId !== excuseId);
-  } catch(e) {
-     console.error(e);
-     alert('Konnte nicht unterzeichnet werden.');
+    const response = await fetch('/api/absences', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('untis_jwt')
+        router.push('/')
+        return
+      }
+      const errData = await response.json()
+      throw new Error(errData.details || 'Failed to fetch absences')
+    }
+    absences.value = await response.json()
+  } catch (err: any) {
+    error.value = err.message || 'An error occurred'
+  } finally {
+    loading.value = false
   }
-};
+}
 
-const rejectExcuse = async (excuseId: string) => {
-  // Temporary just hide it locally
-  excuses.value = excuses.value.filter(e => e.absenceId !== excuseId);
-};
+onMounted(fetchAbsences)
 
 const logout = () => {
-  localStorage.removeItem('untis_jwt');
-  router.push('/');
-};
+  localStorage.removeItem('untis_jwt')
+  router.push('/')
+}
+
+// --- Modal Logic ---
+const openModal = (absence: Absence) => {
+  activeAbsence.value = absence
+  excuseMessage.value = ''
+  excuseMessageError.value = false
+  excuseFiles.value = []
+  submitSuccess.value = false
+  showModal.value = true
+}
+
+const closeModal = () => {
+  showModal.value = false
+  activeAbsence.value = null
+}
+
+const onFileChange = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  if (input.files) excuseFiles.value.push(...Array.from(input.files))
+}
+
+const onDrop = (e: DragEvent) => {
+  e.preventDefault()
+  if (e.dataTransfer?.files) excuseFiles.value.push(...Array.from(e.dataTransfer.files))
+}
+
+const removeFile = (index: number) => {
+  excuseFiles.value.splice(index, 1)
+}
+
+const convertFileToBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = (error) => reject(error)
+  })
+
+const submitExcuse = async () => {
+  if (!activeAbsence.value) return
+  excuseMessageError.value = false
+
+  if (!excuseMessage.value.trim()) {
+    excuseMessageError.value = true
+    return
+  }
+
+  const token = localStorage.getItem('untis_jwt')
+  if (!token) {
+    router.push('/')
+    return
+  }
+
+  submitting.value = true
+  try {
+    const attachments = await Promise.all(
+      excuseFiles.value.map(async (f) => ({
+        fileName: f.name,
+        fileData: await convertFileToBase64(f),
+      })),
+    )
+
+    const res = await fetch('/api/excuses/submit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        absenceId: activeAbsence.value.id,
+        message: excuseMessage.value,
+        attachments,
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || 'Unbekannter Fehler')
+    }
+
+    submitSuccess.value = true
+    await fetchAbsences()
+  } catch (err: any) {
+    alert('Fehler beim Einreichen: ' + err.message)
+  } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
-  <div class="min-h-screen px-6 py-8">
-    <div class="max-w-[1600px] mx-auto">
-      <!-- Header -->
-      <div class="mb-8 flex justify-between items-start">
-        <div>
-          <h1 class="text-4xl font-black text-gray-900 uppercase tracking-tight">
-            Eltern-Dashboard
-          </h1>
-          <p class="text-gray-500 text-sm mt-2">Entschuldigungen zur Bestätigung</p>
+  <div class="min-h-screen w-full bg-[#f4f5f7] flex flex-col font-sans">
+    <header class="bg-primary/95 text-white shadow-sm flex items-center justify-between px-6 py-3">
+      <div class="flex items-center gap-4">
+        <div class="bg-white/20 p-2 rounded text-white font-bold tracking-widest text-xs uppercase">
+          Excuses
         </div>
-        <div class="text-right bg-white rounded-xl px-6 py-4 shadow-sm border border-gray-200">
-          <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Ausstehend</div>
-          <div class="text-3xl font-black text-orange-600">{{ excuses.length }}</div>
-        </div>
+        <h1 class="text-xl font-semibold tracking-tight">Schüler-Dashboard</h1>
       </div>
+      <div>
+        <button
+          @click="logout"
+          class="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded transition text-sm font-semibold"
+        >
+          Abmelden
+        </button>
+      </div>
+    </header>
 
-      <!-- Content -->
-      <div class="space-y-6">
-        <!-- Loading -->
-        <div v-if="loading" class="flex justify-center py-16">
-          <div class="text-center">
-            <div class="w-12 h-12 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mx-auto mb-4"></div>
-            <p class="text-gray-500">Wird geladen...</p>
-          </div>
+    <main class="flex-1 max-w-5xl w-full mx-auto p-6 md:p-10">
+      <div class="flex justify-between items-end mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 tracking-tight">Meine Fehlstunden</h2>
+          <p class="text-gray-500 text-sm mt-1">
+            Ganz einfach unentschuldigte Absenzen nachreichen.
+          </p>
         </div>
-
-        <!-- Error -->
-        <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl px-6 py-4">
-          <p class="font-bold text-red-900">Fehler beim Laden</p>
-          <p class="text-sm text-red-700 mt-1">{{ error }}</p>
-        </div>
-
-        <!-- Empty State -->
-        <div v-else-if="excuses.length === 0" class="bg-white rounded-xl px-8 py-12 text-center shadow-sm border border-gray-200">
-          <div class="text-4xl mb-4">✓</div>
-          <h2 class="text-2xl font-bold text-green-600">Alle Entschuldigungen bearbeitet</h2>
-          <p class="text-gray-500 mt-2">Es gibt keine ausstehenden Entschuldigungen zu unterzeichnen.</p>
-        </div>
-
-        <!-- Table -->
-        <div v-else class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <table class="w-full">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">#</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Schüler</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
-                <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
-                <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Aktion</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr v-for="(excuse, index) in excuses" :key="excuse.absenceId" class="hover:bg-blue-50/50 transition">
-                <td class="px-6 py-4 font-bold text-gray-900">{{ index + 1 }}</td>
-                <td class="px-6 py-4 text-sm text-gray-900 font-semibold">{{ excuse.studentFirstName }} {{ excuse.studentLastName }}</td>
-                <td class="px-6 py-4 text-sm text-gray-700">{{ formatDate(excuse.date) }}</td>
-                <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(excuse.startTime) }}</td>
-                <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(excuse.endTime) }}</td>
-                <td class="px-6 py-4 text-center">
-                  <button @click="viewAttachments(excuse)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
-                    Ansehen
-                  </button>
-                </td>
-                <td class="px-6 py-4 text-center">
-                  <div class="flex gap-2 justify-center">
-                    <button
-                      @click="openSignatureModal(excuse.absenceId)"
-                      class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
-                    >
-                      Unterschreiben
-                    </button>
-                    <button
-                      @click="rejectExcuse(excuse.absenceId)"
-                      class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase transition"
-                    >
-                      Ablehnen
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Footer Buttons -->
-        <div class="flex justify-between gap-4 pt-4">
+        <div class="flex gap-2">
           <button
-            @click="logout"
-            class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-3 rounded-lg font-bold uppercase text-sm transition"
+            @click="fetchAbsences"
+            class="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 font-semibold px-4 py-2 text-sm rounded shadow-sm hover:bg-gray-50 transition"
           >
-            Logout
-          </button>
-          <button
-            @click="fetchExcuses"
-            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold uppercase text-sm transition"
-          >
+            <svg
+              class="w-4 h-4 text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
             Aktualisieren
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- Signature Modal -->
-    <div v-if="showSignatureModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg">
-        <h3 class="text-2xl font-bold text-gray-900 uppercase tracking-tight mb-4">
-          Bitte unterschreiben
-        </h3>
-        <p class="text-gray-600 mb-6 text-sm">
-          Zeichnen Sie Ihre Unterschrift in das untenstehende Feld, um diese Entschuldigung zu bestätigen.
-        </p>
-
-        <div class="border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 mb-6 overflow-hidden">
-          <canvas
-            ref="signatureCanvas"
-            width="450"
-            height="200"
-            class="w-full h-full cursor-crosshair block"
-            @mousedown="startDrawing"
-            @mousemove="draw"
-            @mouseup="stopDrawing"
-            @mouseleave="stopDrawing"
-            @touchstart="startDrawing"
-            @touchmove="draw"
-            @touchend="stopDrawing"
-          ></canvas>
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div v-if="loading" class="flex justify-center p-12">
+          <div
+            class="w-8 h-8 border-2 border-gray-200 border-t-primary rounded-full animate-spin"
+          ></div>
         </div>
 
-        <div class="flex justify-between gap-3 mb-6">
-          <button @click="clearSignature" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg text-sm font-bold transition">
-            Zurücksetzen
-          </button>
+        <div v-else-if="error" class="p-8 bg-red-50 border-l-4 border-red-500 text-red-900">
+          <h3 class="font-bold">Fehler beim Laden</h3>
+          <p class="text-sm mt-1">{{ error }}</p>
         </div>
 
-        <div class="flex gap-3">
-          <button @click="closeSignatureModal" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-3 rounded-lg font-bold uppercase text-sm transition">
-            Abbrechen
-          </button>
-          <button @click="confirmSignature" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold uppercase text-sm transition">
-            Bestätigen
-          </button>
+        <div v-else-if="absences.length === 0" class="p-16 flex flex-col items-center text-center">
+          <div class="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
+            <svg
+              class="w-8 h-8 text-green-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-gray-900">Alles erledigt!</h3>
+          <p class="text-gray-500 text-sm mt-1">
+            Du hast keine unentschuldigten Fehlstunden. Super!
+          </p>
         </div>
+
+        <table v-else class="w-full text-left text-sm whitespace-nowrap">
+          <thead
+            class="bg-gray-50 text-gray-600 border-b border-gray-200 uppercase tracking-wider text-xs"
+          >
+            <tr>
+              <th class="px-6 py-4 font-semibold w-12 text-center">#</th>
+              <th class="px-6 py-4 font-semibold">Datum</th>
+              <th class="px-6 py-4 font-semibold">Zeitraum</th>
+              <th class="px-6 py-4 font-semibold text-right">Aktion</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="(absence, index) in absences" :key="absence.id" class="hover:bg-gray-50/50">
+              <td class="px-6 py-4 text-center font-medium text-gray-500">{{ index + 1 }}</td>
+              <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+              <td class="px-6 py-4 text-gray-600">
+                {{ formatTime(absence.startTime) }} - {{ formatTime(absence.endTime) }} Uhr
+              </td>
+              <td class="px-6 py-4 text-right">
+                <button
+                  @click="openModal(absence)"
+                  class="bg-white border border-gray-300 text-gray-800 hover:border-primary hover:text-primary px-4 py-1.5 rounded font-semibold transition"
+                >
+                  Entschuldigen
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
+    </main>
 
-    <!-- Details Modal -->
-    <div v-if="showAttachmentModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" @click.self="closeAttachmentModal">
-      <div class="bg-white rounded-2xl shadow-2xl p-0 w-full max-w-lg flex flex-col max-h-[90vh]">
-        <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-          <p class="font-bold text-gray-900">Entschuldigungs-Details</p>
-          <button @click="closeAttachmentModal" class="text-gray-400 hover:text-gray-600 transition p-1">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
-        </div>
-        <div class="p-6 overflow-y-auto">
-          <div class="mb-4">
-            <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">Nachricht / Begründung</h4>
-            <p class="text-sm text-gray-800 bg-gray-50 p-4 rounded-xl border border-gray-100">
-              {{ activeExcuseMessage || 'Keine Begründung angegeben' }}
+    <div
+      v-if="showModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+      @click.self="closeModal"
+    >
+      <div
+        class="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden border border-gray-200"
+      >
+        <div v-if="submitSuccess" class="flex flex-col items-center gap-4 px-8 py-10 text-center">
+          <div class="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center">
+            <svg
+              class="w-7 h-7 text-green-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+          <div>
+            <p class="text-lg font-bold text-gray-900">Eingereicht!</p>
+            <p class="text-sm text-gray-500 mt-1 pb-4 border-b border-gray-100">
+              Dein Formular wurde deinem Elternteil/Aufseher zur Unterschrift weitergeleitet.
             </p>
           </div>
+          <button
+            @click="closeModal"
+            class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-2 rounded text-sm font-semibold transition"
+          >
+            Schließen
+          </button>
+        </div>
 
-          <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Anhänge</h4>
-          <div v-if="loadingAttachments" class="text-sm text-gray-500">Lade Anhänge...</div>
-          <div v-else-if="activeAttachments.length === 0" class="text-sm text-gray-500 italic">Keine Anhänge verfügbar.</div>
-          <div v-else class="space-y-4">
-            <div v-for="(file, i) in activeAttachments" :key="i" class="border border-gray-200 rounded-xl overflow-hidden p-2">
-              <p class="text-xs font-bold text-gray-600 mb-2 px-2">{{ file.fileName }}</p>
-              <img v-if="file.fileData.startsWith('data:image')" :src="file.fileData" class="w-full h-auto rounded-lg object-contain max-h-64" alt="Anhang" />
-              <iframe v-else-if="file.fileData.startsWith('data:application/pdf')" :src="file.fileData" class="w-full h-64 rounded-lg"></iframe>
-              <div v-else class="px-2 py-4 text-sm text-gray-500 italic">Format wird nicht unterstützt.</div>
+        <div v-else>
+          <div
+            class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50/50"
+          >
+            <h3 class="font-bold text-gray-900">
+              Absenz entschuldigen
+              <span class="block text-xs font-normal text-gray-500 mt-0.5">
+                {{
+                  activeAbsence
+                    ? `${formatDate(activeAbsence.date)} · ${formatTime(activeAbsence.startTime)} – ${formatTime(activeAbsence.endTime)}`
+                    : ''
+                }}
+              </span>
+            </h3>
+            <button
+              @click="closeModal"
+              class="text-gray-400 hover:text-gray-600 transition p-1 rounded hover:bg-gray-200"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div class="p-6">
+            <div class="mb-5">
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5"
+                >Begründung <span class="text-red-500">*</span></label
+              >
+              <textarea
+                v-model="excuseMessage"
+                rows="3"
+                placeholder="Bitte hier die Begründung für die Abwesenheit eintragen..."
+                :class="[
+                  'w-full text-sm border rounded px-3 py-2 resize-none focus:outline-none focus:ring-1 text-gray-800 placeholder-gray-400 shadow-sm',
+                  excuseMessageError
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-300 focus:ring-primary focus:border-primary',
+                ]"
+                @input="excuseMessageError = false"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-gray-700 mb-1.5">
+                Anhänge <span class="text-gray-400 font-normal">(optional, z.B. Arztzeugnis)</span>
+              </label>
+              <div
+                class="border border-dashed border-gray-300 rounded px-4 py-4 text-center cursor-pointer hover:border-primary hover:bg-blue-50/10 transition bg-gray-50/50"
+                @click="fileInputRef?.click()"
+                @dragover.prevent
+                @drop="onDrop"
+              >
+                <p class="text-sm text-gray-600">
+                  Datei hierher ziehen oder
+                  <span class="text-primary font-semibold">durchsuchen</span>
+                </p>
+              </div>
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                multiple
+                class="hidden"
+                @change="onFileChange"
+              />
+
+              <div v-if="excuseFiles.length > 0" class="mt-3 space-y-2 max-h-32 overflow-y-auto">
+                <div
+                  v-for="(file, i) in excuseFiles"
+                  :key="i"
+                  class="flex items-center gap-3 px-3 py-1.5 bg-white rounded border border-gray-200 shadow-sm"
+                >
+                  <svg
+                    class="w-4 h-4 text-gray-400 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                    />
+                  </svg>
+                  <span class="text-sm text-gray-700 flex-1 truncate">{{ file.name }}</span>
+                  <button
+                    @click="removeFile(i)"
+                    class="text-gray-400 hover:text-red-500 transition px-1"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="px-6 py-4 border-t border-gray-100">
-          <button @click="closeAttachmentModal" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 py-2.5 rounded-xl font-bold uppercase transition text-sm">Schließen</button>
+
+          <div class="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2">
+            <button
+              @click="closeModal"
+              class="px-4 py-1.5 bg-white border border-gray-300 rounded text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
+            >
+              Abbrechen
+            </button>
+            <button
+              @click="submitExcuse"
+              :disabled="submitting"
+              class="px-4 py-1.5 bg-primary text-white rounded text-sm font-semibold hover:bg-primary/90 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg
+                v-if="submitting"
+                class="w-3.5 h-3.5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              {{ submitting ? 'Speichern...' : 'Einreichen' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
-

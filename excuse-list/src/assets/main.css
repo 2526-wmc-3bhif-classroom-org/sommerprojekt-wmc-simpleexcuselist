@@ -1,6 +1,33 @@
 @import './base.css';
 @import "tailwindcss";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 @plugin "daisyui";
+
+@theme {
+  --animate-float-slow: float-slow 20s ease-in-out infinite;
+  --animate-float-medium: float-medium 15s ease-in-out infinite;
+  --animate-fade-in-up: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes float-slow {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.08); }
+    66% { transform: translate(-20px, 20px) scale(0.95); }
+  }
+  @keyframes float-medium {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-40px, 40px) scale(1.12); }
+  }
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
 
 * {
   @apply transition-colors duration-200;
@@ -20,7 +47,7 @@ body {
 
 /* Links */
 a {
-  @apply text-blue-600 hover:text-blue-700 transition-colors;
+  @apply text-primary hover:text-orange-600 transition-colors;
   text-decoration: none;
 }
 
@@ -30,7 +57,7 @@ a {
 }
 
 .btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white;
+  @apply bg-primary hover:bg-orange-600 text-white;
 }
 
 .btn-secondary {
@@ -52,5 +79,18 @@ thead {
 }
 
 tbody tr {
-  @apply border-b border-gray-100 hover:bg-blue-50/30 transition-colors;
+  @apply border-b border-gray-100 hover:bg-orange-50/30 transition-colors;
 }
+
+/* Glassmorphism custom classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+

@@ -16,7 +16,8 @@ const toggleTheme = (e) => {
 }
 
 onMounted(() => {
-  const savedTheme = localStorage.getItem('theme') || 'light';
+  const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const savedTheme = localStorage.getItem('theme') || (systemPrefersDark ? 'dark' : 'light');
   isLightMode.value = savedTheme !== 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
 });

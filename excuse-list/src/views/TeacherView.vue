@@ -188,252 +188,233 @@ onMounted(fetchStudents)
 </script>
 
 <template>
-  <div class="min-h-screen px-6 py-8">
-    <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+  <div class="h-screen w-full flex bg-[#f4f5f7] overflow-hidden font-sans">
 
-      <!-- Header -->
-      <div class="flex justify-between items-center">
-        <div>
-          <h1 class="text-4xl font-black text-gray-900 uppercase tracking-tight">Lehrer-Dashboard</h1>
-          <p class="text-gray-500 text-sm mt-1">
-            Klasse <span class="font-bold text-blue-600">{{ teacherClass }}</span>
-          </p>
-        </div>
-        <div class="flex items-center gap-4">
-          <div class="bg-white rounded-xl px-6 py-3 shadow-sm border border-gray-200 text-right">
-            <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Schüler</div>
-            <div class="text-2xl font-black text-blue-600">{{ students.length }}</div>
-          </div>
+    <!-- Left Sidebar: Navigation & Student List -->
+    <aside class="w-80 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col h-full z-10 shadow-sm relative">
+      <!-- Sidebar Header -->
+      <div class="h-16 flex items-center px-6 border-b border-gray-200 bg-white">
+        <h1 class="text-xl font-bold text-gray-900 tracking-tight">Klasse <span class="text-primary">{{ teacherClass }}</span></h1>
+      </div>
 
-          <button
-            @click="logout"
-
-            class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-3 rounded-xl font-bold uppercase text-sm transition"
-          >
-            Logout
-          </button>
+      <!-- Sidebar Tools -->
+      <div class="p-4 border-b border-gray-100 bg-gray-50/50">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Schülerliste</span>
+          <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ students.length }}</span>
         </div>
       </div>
 
-      <!-- Error Banner -->
-      <div v-if="error" class="bg-red-50 border border-red-200 rounded-xl px-6 py-4">
-        <p class="text-sm font-bold text-red-700">{{ error }}</p>
-      </div>
-
-      <!-- Split Layout -->
-      <div class="flex gap-6 min-h-[70vh]">
-
-        <!-- Left: Student List -->
-        <div class="w-72 flex-shrink-0 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
-          <div class="px-5 py-4 border-b border-gray-100">
-            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest">
-              Schüler — {{ teacherClass }}
-            </h2>
-          </div>
-
-          <!-- Loading -->
-          <div v-if="loadingStudents" class="flex-1 flex items-center justify-center">
-            <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-          </div>
-
-          <!-- Empty -->
-          <div v-else-if="students.length === 0" class="flex-1 flex items-center justify-center px-4 text-center">
-            <p class="text-sm text-gray-400">Keine Schüler gefunden.</p>
-          </div>
-
-          <!-- List -->
-          <div v-else class="flex-1 overflow-y-auto divide-y divide-gray-50">
+      <!-- Student List -->
+      <div class="flex-1 overflow-y-auto w-full">
+        <!-- Loading -->
+        <div v-if="loadingStudents" class="flex p-8 justify-center">
+          <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+        </div>
+        <!-- Empty -->
+        <div v-else-if="students.length === 0" class="p-8 text-center text-sm text-gray-400">
+          Keine Schüler
+        </div>
+        <!-- List -->
+        <ul v-else class="divide-y divide-gray-100">
+          <li v-for="student in students" :key="student.untisId">
             <button
-              v-for="student in students"
-              :key="student.untisId"
               @click="selectStudent(student)"
               :class="[
-                'w-full text-left px-5 py-4 transition flex items-center gap-3',
+                'w-full flex items-center px-6 py-3 text-left transition-colors outline-none',
                 selectedStudent?.untisId === student.untisId
-                  ? 'bg-blue-600 text-white'
-                  : 'hover:bg-gray-50 text-gray-900'
+                  ? 'bg-primary/10 border-r-4 border-primary'
+                  : 'hover:bg-gray-50 border-r-4 border-transparent'
               ]"
             >
-              <div
-                :class="[
-                  'w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0',
-                  selectedStudent?.untisId === student.untisId ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-600'
-                ]"
-              >
-                {{ student.firstName[0] }}{{ student.lastName[0] }}
-              </div>
-              <div class="min-w-0">
-                <div class="font-bold text-sm truncate">{{ student.lastName }}</div>
-                <div :class="['text-xs truncate', selectedStudent?.untisId === student.untisId ? 'text-blue-200' : 'text-gray-400']">
-                  {{ student.firstName }}
-                </div>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Right: Absences Panel -->
-        <div class="flex-1 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
-
-          <!-- No student selected -->
-          <div v-if="!selectedStudent" class="flex-1 flex flex-col items-center justify-center text-center px-8">
-            <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-              <svg class="w-8 h-8 text-blue-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            </div>
-            <h3 class="text-xl font-bold text-gray-900">Schüler auswählen</h3>
-            <p class="text-gray-400 text-sm mt-2">Klicken Sie links auf einen Schüler, um seine unterschriebenen Absenzen zu sehen.</p>
-          </div>
-
-          <!-- Student selected -->
-          <template v-else>
-            <!-- Panel Header -->
-            <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
-              <div>
-                <h2 class="text-xl font-black text-gray-900">
-                  {{ selectedStudent.firstName }} {{ selectedStudent.lastName }}
-                </h2>
-                <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-wide font-bold">
-                  Offene Entschuldigungen
+              <div class="flex-1 min-w-0">
+                <p :class="['text-sm font-semibold truncate', selectedStudent?.untisId === student.untisId ? 'text-primary' : 'text-gray-900']">
+                  {{ student.lastName }}, {{ student.firstName }}
                 </p>
               </div>
-              <div class="flex items-center gap-3">
-                <button
-                  @click="toggleAnalytics"
-                  :class="[
-                    'px-4 py-2 rounded-lg font-bold uppercase text-xs transition',
-                    showAnalytics ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-                  ]"
-                >
-                  {{ showAnalytics ? 'Absenzen' : 'Analyse' }}
-                </button>
-                <span v-if="!showAnalytics" class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                  {{ activeAbsences.length }} Eintrag{{ activeAbsences.length !== 1 ? 'e' : '' }}
-                </span>
-              </div>
-            </div>
+              <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="selectedStudent?.untisId === student.untisId">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </li>
+        </ul>
+      </div>
 
-            <!-- Analytics -->
-            <div v-if="showAnalytics" class="flex-1 overflow-auto p-6">
-              <div v-if="loadingAnalytics" class="h-full flex items-center justify-center">
-                <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-              </div>
-              <div v-else-if="analytics.length === 0" class="h-full flex flex-col items-center justify-center text-center">
-                <div class="text-4xl mb-4">📊</div>
-                <h3 class="text-lg font-bold text-gray-900">Keine Daten</h3>
-                <p class="text-sm text-gray-400 mt-1">Für diesen Schüler wurden noch keine Stunden-Absenzen erfasst.</p>
-              </div>
-              <div v-else>
-                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Versäumte Stunden pro Fach</h3>
-                <table class="w-full">
-                  <thead class="bg-gray-50 border-b border-gray-100">
+      <!-- Sidebar Footer (Logout) -->
+      <div class="p-4 border-t border-gray-200 bg-white">
+        <div class="flex items-center mb-3 px-2">
+          <div class="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-xs uppercase mr-3">
+            {{ teacherName.substring(0, 2) }}
+          </div>
+          <div class="text-sm font-semibold text-gray-700 truncate">{{ teacherName }}</div>
+        </div>
+        <button @click="logout" class="w-full flex items-center justify-center space-x-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 px-4 py-2 rounded border border-gray-200 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+          <span>Abmelden</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full bg-[#f4f5f7] overflow-hidden">
+      <!-- Top navbar -->
+      <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 flex-shrink-0 shadow-sm">
+        <div class="flex items-center text-sm text-gray-500">
+          <span>Lehrer-Dashboard</span>
+          <span class="mx-2 text-gray-300">/</span>
+          <span v-if="selectedStudent" class="font-semibold text-gray-900">
+            {{ selectedStudent.firstName }} {{ selectedStudent.lastName }}
+          </span>
+          <span v-else>Bitte Schüler auswählen</span>
+        </div>
+      </header>
+
+      <!-- Scrollable content -->
+      <div class="flex-1 overflow-auto p-8 relative">
+        <div v-if="!selectedStudent" class="h-full flex flex-col items-center justify-center opacity-50">
+          <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <p class="text-gray-500 text-lg">Wählen Sie einen Schüler links aus</p>
+        </div>
+
+        <div v-else class="max-w-5xl mx-auto">
+          <!-- Main Toolbar for Student -->
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-900">Offene Entschuldigungen</h2>
+            <div class="flex space-x-2 bg-white rounded-md border border-gray-200 p-1 shadow-sm">
+              <button
+                @click="showAnalytics = false"
+                :class="['px-4 py-1.5 text-sm font-semibold rounded', !showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']"
+              >
+                Liste
+              </button>
+              <button
+                @click="showAnalytics = true; if(analytics.length===0) fetchAnalytics();"
+                :class="['px-4 py-1.5 text-sm font-semibold rounded', showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']"
+              >
+                Analyse
+              </button>
+            </div>
+          </div>
+
+          <!-- Content Card -->
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <!-- Analytics View -->
+            <div v-if="showAnalytics">
+               <div v-if="loadingAnalytics" class="p-12 flex justify-center">
+                 <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+               </div>
+               <div v-else-if="analytics.length === 0" class="p-12 text-center text-gray-500">
+                 Keine Daten vorhanden.
+               </div>
+               <table v-else class="w-full text-sm text-left">
+                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
                     <tr>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Fach</th>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bezeichnung</th>
-                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Versäumt</th>
+                      <th class="px-6 py-3 font-semibold w-1/4">Fach</th>
+                      <th class="px-6 py-3 font-semibold">Bezeichnung</th>
+                      <th class="px-6 py-3 font-semibold text-right w-1/4">Versäumt</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-50">
-                    <tr v-for="stat in analytics" :key="stat.subjectName" class="hover:bg-gray-50 transition">
-                      <td class="px-6 py-3 text-sm font-bold text-gray-900">{{ stat.subjectName }}</td>
-                      <td class="px-6 py-3 text-sm text-gray-600">{{ stat.subjectLongName || '—' }}</td>
-                      <td class="px-6 py-3 text-right">
-                        <span
-                          :class="['inline-flex items-center justify-center min-w-[2.5rem] px-3 py-1 rounded-full text-sm font-black', severityClass(stat.missedLessons)]"
-                        >
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="stat in analytics" :key="stat.subjectName" class="hover:bg-gray-50/50">
+                      <td class="px-6 py-4 font-medium text-gray-900">{{ stat.subjectName }}</td>
+                      <td class="px-6 py-4 text-gray-600">{{ stat.subjectLongName || '—' }}</td>
+                      <td class="px-6 py-4 text-right">
+                        <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', severityClass(stat.missedLessons)]">
                           {{ stat.missedLessons }}
                         </span>
                       </td>
                     </tr>
                   </tbody>
-                </table>
-              </div>
+               </table>
             </div>
 
-            <template v-else>
-            <!-- Loading -->
-            <div v-if="loadingAbsences" class="flex-1 flex items-center justify-center">
-              <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+            <!-- List View -->
+            <div v-else>
+               <div v-if="loadingAbsences" class="p-12 flex justify-center">
+                 <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+               </div>
+               <div v-else-if="activeAbsences.length === 0" class="p-12 flex flex-col items-center">
+                  <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  </div>
+                  <p class="text-gray-500 text-sm font-medium">Alle Absenzen wurden bearbeitet.</p>
+               </div>
+               <table v-else class="w-full text-sm text-left">
+                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                    <tr>
+                      <th class="px-6 py-3 font-semibold">Datum</th>
+                      <th class="px-6 py-3 font-semibold">Von</th>
+                      <th class="px-6 py-3 font-semibold">Bis</th>
+                      <th class="px-6 py-3 font-semibold text-center">Status</th>
+                      <th class="px-6 py-3 font-semibold text-right">Aktion</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                      <td class="px-6 py-4 font-medium text-gray-900">{{ formatDate(absence.date) }}</td>
+                      <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                      <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                      <td class="px-6 py-4 text-center">
+                        <span class="inline-flex items-center gap-1.5 text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-semibold border border-green-200">
+                          Unterschrieben
+                        </span>
+                      </td>
+                      <td class="px-6 py-4 text-right">
+                        <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">
+                          Ansehen
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+               </table>
             </div>
-
-            <!-- Empty -->
-            <div v-else-if="activeAbsences.length === 0" class="flex-1 flex flex-col items-center justify-center text-center px-8">
-              <div class="text-4xl mb-4">✓</div>
-              <h3 class="text-lg font-bold text-gray-900">Keine Einträge</h3>
-              <p class="text-sm text-gray-400 mt-1">Es wurden keine entsprechenden Absenzen gefunden.</p>
-            </div>
-
-            <!-- Absences Table -->
-            <div v-else class="flex-1 overflow-auto">
-              <table class="w-full">
-                <thead class="bg-gray-50 border-b border-gray-100 sticky top-0">
-                <tr>
-                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
-                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
-                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
-                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
-                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
-                </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-50">
-                <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50 transition">
-                  <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
-                  <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
-                  <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
-                  <td class="px-6 py-4 text-center">
-                    <button @click="viewAttachments(absence)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
-                      Ansehen
-                    </button>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                      <span class="inline-flex items-center gap-1.5 text-green-700 text-xs font-bold">
-                        <span class="w-2 h-2 rounded-full bg-green-600"></span>
-                        Unterschrieben
-                      </span>
-                  </td>
-                </tr>
-                </tbody>
-              </table>
-            </div>
-            </template>
-          </template>
+          </div>
 
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- Details Modal -->
-    <div v-if="showAttachmentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="closeAttachmentModal">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-        <div class="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-          <p class="font-bold text-gray-900">Entschuldigungs-Details</p>
-          <button @click="closeAttachmentModal" class="text-gray-400 hover:text-gray-600 transition p-1">
+    <div v-if="showAttachmentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4" @click.self="closeAttachmentModal">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-xl flex flex-col max-h-[90vh] border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50 rounded-t-lg">
+          <h3 class="font-bold text-gray-900">Details</h3>
+          <button @click="closeAttachmentModal" class="text-gray-400 hover:text-gray-900 transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
-        <div class="p-6 overflow-y-auto">
-          <div class="mb-4">
-            <h4 class="text-xs font-bold text-gray-500 uppercase mb-1">Nachricht / Begründung</h4>
-            <p class="text-sm text-gray-800 bg-gray-50 p-4 rounded-xl border border-gray-100">
-              {{ activeExcuseMessage || 'Keine Begründung angegeben' }}
-            </p>
+
+        <div class="p-6 overflow-y-auto flex-1">
+          <div class="mb-6">
+            <label class="block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2">Begründung</label>
+            <div class="bg-gray-50 p-4 rounded border border-gray-200 text-sm text-gray-800 break-words whitespace-pre-wrap">
+              {{ activeExcuseMessage || 'Keine Begründung eingegeben' }}
+            </div>
           </div>
 
-          <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Anhänge</h4>
-          <div v-if="loadingAttachments" class="text-sm text-gray-500">Lade Anhänge...</div>
-          <div v-else-if="activeAttachments.length === 0" class="text-sm text-gray-500 italic">Keine Anhänge verfügbar.</div>
-          <div v-else class="space-y-4">
-            <div v-for="(file, i) in activeAttachments" :key="i" class="border border-gray-200 rounded-xl overflow-hidden p-2">
-              <p class="text-xs font-bold text-gray-600 mb-2 px-2">{{ file.fileName }}</p>
-              <img v-if="file.fileData.startsWith('data:image')" :src="file.fileData" class="w-full h-auto rounded-lg object-contain max-h-64" alt="Anhang" />
-              <iframe v-else-if="file.fileData.startsWith('data:application/pdf')" :src="file.fileData" class="w-full h-64 rounded-lg"></iframe>
-              <div v-else class="px-2 py-4 text-sm text-gray-500 italic">Format wird nicht unterstützt.</div>
+          <div>
+            <label class="block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2">Anhänge</label>
+            <div v-if="loadingAttachments" class="text-sm text-gray-500">Laden...</div>
+            <div v-else-if="activeAttachments.length === 0" class="text-sm text-gray-400 italic">Keine Anhänge</div>
+            <div v-else class="space-y-4">
+              <div v-for="(file, i) in activeAttachments" :key="i" class="border border-gray-200 rounded overflow-hidden">
+                <div class="bg-gray-50 px-3 py-2 border-b border-gray-200 text-xs font-semibold text-gray-600">{{ file.fileName }}</div>
+                <div class="p-2">
+                  <img v-if="file.fileData.startsWith('data:image')" :src="file.fileData" class="w-full h-auto mx-auto object-contain max-h-64" alt="Anhang" />
+                  <iframe v-else-if="file.fileData.startsWith('data:application/pdf')" :src="file.fileData" class="w-full h-64 border-0"></iframe>
+                  <div v-else class="p-4 text-sm text-gray-500 text-center">Format wird nicht unterstützt.</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-gray-100">
-          <button @click="closeAttachmentModal" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 py-2.5 rounded-xl font-bold uppercase transition text-sm">Schließen</button>
+
+        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50/50 rounded-b-lg flex justify-end">
+          <button @click="closeAttachmentModal" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded text-sm font-semibold transition-colors shadow-sm">
+            Schließen
+          </button>
         </div>
       </div>
     </div>

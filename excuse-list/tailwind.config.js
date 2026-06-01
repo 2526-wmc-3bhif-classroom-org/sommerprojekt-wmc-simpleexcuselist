@@ -5,10 +5,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#3B82F6',
-        secondary: '#8B5CF6',
-        accent: '#EC4899',
-        neutral: '#F3F4F6',
+        primary: '#FF7A00', // WebUntis orange
+        secondary: '#0055A4', // WebUntis blue (often used as secondary)
+        accent: '#FACC15',
+        neutral: '#F9FAFB', // very light gray
         'neutral-dark': '#1F2937',
       },
       fontFamily: {
@@ -18,6 +18,23 @@ export default {
   },
   plugins: [daisyui],
   daisyui: {
-    themes: ['light', 'dark'],
+    themes: [
+      {
+        light: {
+          ...require("daisyui/src/theming/themes")["light"],
+          primary: "#FF7A00",
+          secondary: "#0055A4",
+          "base-100": "#ffffff",
+          "base-200": "#f3f4f6",
+        },
+        dark: {
+          ...require("daisyui/src/theming/themes")["dark"],
+          primary: "#FF7A00",
+          secondary: "#0055A4",
+          "base-100": "#1f2937",
+          "base-200": "#111827",
+        },
+      },
+    ],
   },
 }
