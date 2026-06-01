@@ -94,3 +94,15 @@ tbody tr {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+@keyframes float-particle {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(30px, -45px);
+  }
+  66% {
+    transform: translate(-20px, 30px);
+  }
+}
+

@@ -11,6 +11,36 @@ const error = ref('');
 const loading = ref(false);
 const router = useRouter();
 
+interface Particle {
+  id: number;
+  top: string;
+  left: string;
+  size: string;
+  delay: string;
+  duration: string;
+  opacity: number;
+  color: string;
+}
+
+const particles = ref<Particle[]>([]);
+
+// WebUntis Orange, WebUntis Blue, and Slate Gray
+const colors = ['#FF7A00', '#0055A4', '#94A3B8'];
+
+for (let i = 0; i < 40; i++) {
+  particles.value.push({
+    id: i,
+    top: `${Math.random() * 100}%`,
+    left: `${Math.random() * 100}%`,
+    size: `${Math.random() * 8 + 4}px`, // 4px to 12px
+    delay: `-${Math.random() * 20}s`,
+    duration: `${Math.random() * 25 + 15}s`,
+    opacity: Math.random() * 0.2 + 0.1, // 0.10 to 0.30
+    color: colors[i % colors.length] || '#FF7A00',
+  });
+}
+
+
 const togglePassword = () => {
   showPassword.value = !showPassword.value;
 };
@@ -60,13 +90,37 @@ const login = async () => {
 
 <template>
   <!-- Main container: Supports smooth transitions between light and dark settings -->
-  <div class="min-h-screen w-full flex bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300 font-sans">
+  <div class="min-h-screen w-full flex bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-300 font-sans relative overflow-hidden">
+    
+    <!-- Particles Background -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden z-0">
+      <div
+        v-for="particle in particles"
+        :key="particle.id"
+        class="absolute rounded-full"
+        :style="{
+          top: particle.top,
+          left: particle.left,
+          width: particle.size,
+          height: particle.size,
+          backgroundColor: particle.color,
+          opacity: particle.opacity.toString(),
+          animation: `float-particle ${particle.duration} ease-in-out infinite`,
+          animationDelay: particle.delay
+        }"
+      ></div>
+    </div>
     
     <!-- Left side: Branding & School Identity (Hidden on mobile/tablet, shown on lg screens) -->
-    <div class="hidden lg:flex w-5/12 bg-slate-100 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col justify-between p-16 select-none transition-colors duration-300">
+    <div class="hidden lg:flex w-5/12 bg-slate-100/50 dark:bg-slate-900/40 border-r border-slate-200 dark:border-slate-800 flex-col justify-between p-16 select-none transition-colors duration-300 relative z-10 backdrop-blur-[2px]">
       
+      <!-- Grid overlay & subtle ambient glow orbs -->
+      <div class="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.015)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.015)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.006)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.006)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none z-0"></div>
+      <div class="absolute -top-40 -left-40 w-96 h-96 bg-primary/10 dark:bg-primary/5 rounded-full filter blur-[100px] pointer-events-none z-0"></div>
+      <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-secondary/10 dark:bg-secondary/5 rounded-full filter blur-[100px] pointer-events-none z-0"></div>
+
       <!-- Top header with logo -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 relative z-10">
         <div class="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center p-2 shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-300">
           <img :src="logo" alt="Logo" class="w-full h-full object-contain" />
         </div>
@@ -74,7 +128,7 @@ const login = async () => {
       </div>
 
       <!-- Center: School name & branding -->
-      <div class="my-auto">
+      <div class="my-auto relative z-10">
         <h1 class="text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-none mb-6 transition-colors duration-300">
           HTBLA <br/>
           Leonding
@@ -86,13 +140,13 @@ const login = async () => {
       </div>
 
       <!-- Bottom footer -->
-      <div class="text-[10px] text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-wider transition-colors duration-300">
+      <div class="text-[10px] text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-wider transition-colors duration-300 relative z-10">
         © 2026 HTBLA Leonding
       </div>
     </div>
 
-    <!-- Right side: Login Mask (Dynamic background, elements centered) -->
-    <div class="w-full lg:w-7/12 flex flex-col justify-center items-center p-6 sm:p-12 bg-slate-50 dark:bg-slate-950 min-h-screen relative transition-colors duration-300">
+    <!-- Right side: Login Mask (bg-transparent to show floating particles) -->
+    <div class="w-full lg:w-7/12 flex flex-col justify-center items-center p-6 sm:p-12 bg-transparent min-h-screen relative z-10 transition-colors duration-300">
       
       <!-- Absolute positioning of the Theme Toggle so it stays in the corner and doesn't push the card -->
       <div class="absolute top-6 right-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 shadow-sm transition-colors duration-300">
