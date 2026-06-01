@@ -11,7 +11,12 @@ import {
   fetchRandomFirstName,
   fetchTimetableForRange,
 } from '../data/untisService';
-import { syncAbsenceLessons } from '../data/analyticsRepository';
+import {
+  syncAbsenceLessons,
+  syncClassScheduledLessons,
+  getClassLastSynced,
+  setClassLastSynced,
+} from '../data/analyticsRepository';
 import { upsertStudent } from '../data/studentRepository';
 import {
   getTeacherByUsername,
@@ -25,6 +30,9 @@ import { syncAbsences } from '../data/absenceRepository';
 
 const router = Router();
 
+const SCHOOL_YEAR_START = 20250901; // YYYYMMDD
+const SYNC_OVERLAP_DAYS = 7; // re-fetch the last week so recent changes self-heal
+
 function untisIntToDate(d: number): Date {
   const s = String(d);
   return new Date(
@@ -34,32 +42,55 @@ function untisIntToDate(d: number): Date {
   );
 }
 
-// Fetches the student's timetable for the span their absences cover, matches
-// lessons that overlap an absence, and stores them. Runs after the login
-// response is sent so it never adds latency to the (already slow) login.
+function dateToUntisInt(d: Date): number {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+// Keeps the shared class timetable fresh and rematches this student's absences
+// against it. The class timetable is backfilled once (first login of the class)
+// and every later login only tops up the last week — so a normal login costs
+// ~1–2 WebUntis calls, not a full-year fetch. Runs after the login response is
+// sent so it never adds latency to the (already slow) login.
 async function syncStudentTimetableInBackground(
   username: string,
   password: string,
   personId: number,
+  className: string,
   untisAbsences: any[],
 ): Promise<void> {
   try {
-    const dates = untisAbsences
-      .map((a) => Number(a.startDate ?? a.date))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    if (dates.length === 0) return;
+    const todayInt = dateToUntisInt(new Date());
 
-    const start = untisIntToDate(Math.min(...dates));
-    const end = untisIntToDate(Math.max(...dates));
+    // Resume from the class watermark (minus an overlap window); backfill the
+    // whole year only when the class has never been synced.
+    let lastSynced: number | null;
+    {
+      const rdb = new Unit(true);
+      lastSynced = getClassLastSynced(rdb, className);
+      rdb.complete(null);
+    }
+
+    let fetchStartInt = SCHOOL_YEAR_START;
+    if (lastSynced != null) {
+      const overlap = untisIntToDate(lastSynced);
+      overlap.setDate(overlap.getDate() - SYNC_OVERLAP_DAYS);
+      fetchStartInt = Math.max(SCHOOL_YEAR_START, dateToUntisInt(overlap));
+    }
 
     const lessons = await withUntis(username, password, (untis) =>
-      fetchTimetableForRange(untis, start, end),
+      fetchTimetableForRange(untis, untisIntToDate(fetchStartInt), new Date()),
     );
 
     const db = new Unit(false);
     try {
-      syncAbsenceLessons(db, personId, lessons, untisAbsences);
+      const scheduled = syncClassScheduledLessons(db, className, lessons, fetchStartInt);
+      setClassLastSynced(db, className, todayInt);
+      const matched = syncAbsenceLessons(db, personId, className, untisAbsences);
       db.complete(true);
+      console.log(
+        `Timetable sync ${className}/${personId}: fetched from ${fetchStartInt}, ` +
+          `${lessons.length} lessons, ${scheduled} stored, ${matched} matched to absences.`,
+      );
     } catch (err) {
       db.complete(false);
       throw err;
@@ -107,7 +138,7 @@ router.post('/api/login', async (req, res) => {
       }
     }
 
-    let bgSync: { personId: number; untisAbsences: any[] } | null = null;
+    let bgSync: { personId: number; className: string; untisAbsences: any[] } | null = null;
 
     const result = await withUntis(username, password, async (untis) => {
       const session = untis.sessionInformation;
@@ -169,7 +200,7 @@ router.post('/api/login', async (req, res) => {
         );
 
         db.complete(true);
-        bgSync = { personId, untisAbsences };
+        bgSync = { personId, className, untisAbsences };
         return { token, role: 'student', absences };
       } catch (err) {
         db.complete(false);
@@ -180,8 +211,8 @@ router.post('/api/login', async (req, res) => {
     res.json(result);
 
     if (bgSync) {
-      const { personId, untisAbsences } = bgSync;
-      void syncStudentTimetableInBackground(username, password, personId, untisAbsences);
+      const { personId, className, untisAbsences } = bgSync;
+      void syncStudentTimetableInBackground(username, password, personId, className, untisAbsences);
     }
   } catch (error: any) {
     console.error('Login error:', error.message);

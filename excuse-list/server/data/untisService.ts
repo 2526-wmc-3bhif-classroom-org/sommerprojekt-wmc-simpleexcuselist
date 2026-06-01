@@ -19,12 +19,40 @@ export async function withUntis<T>(
   }
 }
 
+// WebUntis' getOwnTimetableForRange rejects large date ranges — the server
+// returns an empty body which the library throws as "Server didn't return any
+// result." (A single week works, which is why login's class-lookup succeeds.)
+// So we walk the range in weekly chunks and concatenate. Runs in the background,
+// so the extra round-trips don't affect login latency. Weeks with no lessons
+// (holidays) also throw that same error, so a failing chunk is skipped, not fatal.
 export async function fetchTimetableForRange(
   untis: WebUntis,
   start: Date,
   end: Date,
 ) {
-  return untis.getOwnTimetableForRange(start, end);
+  const CHUNK_DAYS = 7;
+  const lessons: any[] = [];
+
+  const cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+
+  while (cursor <= end) {
+    const chunkStart = new Date(cursor);
+    const chunkEnd = new Date(cursor);
+    chunkEnd.setDate(chunkEnd.getDate() + CHUNK_DAYS - 1);
+    if (chunkEnd > end) chunkEnd.setTime(end.getTime());
+
+    try {
+      const result = await untis.getOwnTimetableForRange(chunkStart, chunkEnd);
+      if (Array.isArray(result)) lessons.push(...result);
+    } catch {
+      // Empty/holiday week or a transient error — skip this chunk.
+    }
+
+    cursor.setDate(cursor.getDate() + CHUNK_DAYS);
+  }
+
+  return lessons;
 }
 
 export async function fetchRandomFirstName(): Promise<string> {
