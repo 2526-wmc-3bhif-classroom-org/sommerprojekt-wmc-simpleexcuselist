@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import VueApexCharts from 'vue3-apexcharts'
+import type { ApexOptions } from 'apexcharts'
+import TimetableHeatmap from '@/components/TimetableHeatmap.vue'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Student {
   untisId: number
@@ -27,7 +32,35 @@ interface SubjectStat {
   subjectName: string
   subjectLongName: string
   missedLessons: number
+  totalLessons: number | null
+  percentage: number | null
 }
+
+interface HeatmapCell {
+  dayOfWeek: number
+  period: number
+  count: number
+}
+
+interface StudentTopSubjects {
+  untisId: number
+  firstName: string
+  lastName: string
+  top3: SubjectStat[]
+}
+
+interface AnalyticsPayload {
+  stats: SubjectStat[]
+  heatmap: HeatmapCell[]
+}
+
+interface ClassAnalyticsPayload {
+  stats: SubjectStat[]
+  heatmap: HeatmapCell[]
+  studentTable: StudentTopSubjects[]
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
 
 const router = useRouter()
 const students = ref<Student[]>([])
@@ -39,32 +72,28 @@ const error = ref('')
 const teacherName = ref('')
 const teacherClass = ref('')
 
+// Student analytics
 const showAnalytics = ref(false)
-const analytics = ref<SubjectStat[]>([])
+const analyticsMode = ref<'open' | 'all'>('open')
+const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [] })
 const loadingAnalytics = ref(false)
 
+// Class analytics — always over all absences (no open/all toggle).
 const showClassAnalytics = ref(false)
-const classAnalytics = ref<SubjectStat[]>([])
+const classAnalytics = ref<ClassAnalyticsPayload>({ stats: [], heatmap: [], studentTable: [] })
 const loadingClassAnalytics = ref(false)
 
-const severityClass = (n: number) => {
-  if (n <= 2) return 'bg-green-100 text-green-700'
-  if (n <= 5) return 'bg-yellow-100 text-yellow-700'
-  return 'bg-red-100 text-red-700'
-}
-
-// --- Attachments Modal ---
+// Attachments modal
 const showAttachmentModal = ref(false)
 const loadingAttachments = ref(false)
 const activeAttachments = ref<Attachment[]>([])
 const activeExcuseMessage = ref('')
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const getToken = () => {
   const token = localStorage.getItem('untis_jwt')
-  if (!token) {
-    router.push('/')
-    return null
-  }
+  if (!token) { router.push('/'); return null }
   return token
 }
 
@@ -76,6 +105,56 @@ const decodeToken = (token: string) => {
   } catch {}
 }
 
+const formatDate = (dateNum: number) => {
+  const s = dateNum.toString()
+  return `${s.substring(6, 8)}.${s.substring(4, 6)}.${s.substring(0, 4)}`
+}
+
+const formatTime = (timeNum: number) => {
+  const s = timeNum.toString().padStart(4, '0')
+  return `${s.substring(0, 2)}:${s.substring(2, 4)}`
+}
+
+const severityClass = (n: number) => {
+  if (n <= 2) return 'bg-green-100 text-green-700'
+  if (n <= 5) return 'bg-yellow-100 text-yellow-700'
+  return 'bg-red-100 text-red-700'
+}
+
+const percentageClass = (p: number | null) => {
+  if (p === null) return 'bg-gray-100 text-gray-500'
+  if (p <= 20) return 'bg-green-100 text-green-700'
+  if (p <= 40) return 'bg-yellow-100 text-yellow-700'
+  return 'bg-red-100 text-red-700'
+}
+
+// ─── Chart builders ───────────────────────────────────────────────────────────
+// The heatmap is the timetable-style grid in TimetableHeatmap.vue (fed directly
+// with the heatmap cells). Only the pie chart still uses ApexCharts.
+
+function buildPieSeries(stats: SubjectStat[]) {
+  return {
+    series: stats.map((s) => s.missedLessons),
+    labels: stats.map((s) => s.subjectName),
+  }
+}
+
+const pieOptions: ApexOptions = {
+  chart: { type: 'pie', toolbar: { show: false } },
+  legend: { position: 'bottom' },
+  // Slice share = proportion of all missed lessons (spec Q8); tooltip shows the
+  // absolute count behind each slice.
+  tooltip: { y: { formatter: (v: number) => `${v} Fehlstunden` } },
+  dataLabels: { formatter: (v: number) => `${Math.round(Number(v))}%` },
+}
+
+// ─── Computed chart data ──────────────────────────────────────────────────────
+
+const studentPie = computed(() => buildPieSeries(analytics.value.stats))
+const classPie = computed(() => buildPieSeries(classAnalytics.value.stats))
+
+// ─── Data fetching ────────────────────────────────────────────────────────────
+
 const fetchStudents = async () => {
   const token = getToken()
   if (!token) return
@@ -83,9 +162,7 @@ const fetchStudents = async () => {
   loadingStudents.value = true
   error.value = ''
   try {
-    const res = await fetch('/api/teacher/students', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const res = await fetch('/api/teacher/students', { headers: { Authorization: `Bearer ${token}` } })
     if (!res.ok) {
       if (res.status === 401) { localStorage.removeItem('untis_jwt'); router.push('/'); return }
       throw new Error(`Fehler (${res.status})`)
@@ -101,7 +178,7 @@ const fetchStudents = async () => {
 const selectStudent = async (student: Student) => {
   selectedStudent.value = student
   absences.value = []
-  analytics.value = []
+  analytics.value = { stats: [], heatmap: [] }
   showAnalytics.value = false
   showClassAnalytics.value = false
   const token = getToken()
@@ -109,7 +186,7 @@ const selectStudent = async (student: Student) => {
   loadingAbsences.value = true
   try {
     const res = await fetch(`/api/teacher/students/${student.untisId}/absences`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error(`Fehler (${res.status})`)
     absences.value = await res.json()
@@ -120,16 +197,16 @@ const selectStudent = async (student: Student) => {
   }
 }
 
-
 const fetchAnalytics = async () => {
   if (!selectedStudent.value) return
   const token = getToken()
   if (!token) return
   loadingAnalytics.value = true
   try {
-    const res = await fetch(`/api/teacher/students/${selectedStudent.value.untisId}/analytics`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const res = await fetch(
+      `/api/teacher/students/${selectedStudent.value.untisId}/analytics?mode=${analyticsMode.value}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
     if (!res.ok) throw new Error(`Fehler (${res.status})`)
     analytics.value = await res.json()
   } catch (err: any) {
@@ -139,24 +216,13 @@ const fetchAnalytics = async () => {
   }
 }
 
-const toggleAnalytics = () => {
-  showAnalytics.value = !showAnalytics.value
-  if (showAnalytics.value && analytics.value.length === 0) fetchAnalytics()
-}
-
-const toggleClassAnalytics = () => {
-  showClassAnalytics.value = true
-  selectedStudent.value = null
-  if (classAnalytics.value.length === 0) fetchClassAnalytics()
-}
-
 const fetchClassAnalytics = async () => {
   const token = getToken()
   if (!token) return
   loadingClassAnalytics.value = true
   try {
-    const res = await fetch(`/api/teacher/class/analytics`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const res = await fetch(`/api/teacher/class/analytics?mode=all`, {
+      headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error(`Fehler (${res.status})`)
     classAnalytics.value = await res.json()
@@ -167,16 +233,20 @@ const fetchClassAnalytics = async () => {
   }
 }
 
-const activeAbsences = computed(() => absences.value.filter(a => a.status === 'signed'))
-
-const formatDate =  (dateNum: number) => {
-  const s = dateNum.toString()
-  return `${s.substring(6, 8)}.${s.substring(4, 6)}.${s.substring(0, 4)}`
+const toggleAnalytics = () => {
+  showAnalytics.value = !showAnalytics.value
+  if (showAnalytics.value) fetchAnalytics()
 }
 
-const formatTime = (timeNum: number) => {
-  const s = timeNum.toString().padStart(4, '0')
-  return `${s.substring(0, 2)}:${s.substring(2, 4)}`
+const setAnalyticsMode = (mode: 'open' | 'all') => {
+  analyticsMode.value = mode
+  fetchAnalytics()
+}
+
+const toggleClassAnalytics = () => {
+  showClassAnalytics.value = true
+  selectedStudent.value = null
+  fetchClassAnalytics()
 }
 
 const viewAttachments = async (absence: Absence) => {
@@ -185,15 +255,12 @@ const viewAttachments = async (absence: Absence) => {
   showAttachmentModal.value = true
   const token = getToken()
   if (!token) return
-
   loadingAttachments.value = true
   try {
     const res = await fetch(`/api/absences/${absence.id}/attachments`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     })
-    if (res.ok) {
-      activeAttachments.value = await res.json()
-    }
+    if (res.ok) activeAttachments.value = await res.json()
   } catch (e) {
     console.error(e)
   } finally {
@@ -211,6 +278,8 @@ const logout = () => {
   localStorage.removeItem('untis_jwt')
   router.push('/')
 }
+
+const activeAbsences = computed(() => absences.value.filter((a) => a.status === 'signed'))
 
 onMounted(fetchStudents)
 </script>
@@ -232,12 +301,12 @@ onMounted(fetchStudents)
             @click="toggleClassAnalytics"
             :class="[
               'px-5 py-3 rounded-xl font-bold uppercase text-sm transition',
-              showClassAnalytics ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+              showClassAnalytics ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-600 hover:bg-blue-100',
             ]"
           >
             Klassen-Analyse
           </button>
-          
+
           <div class="bg-white rounded-xl px-6 py-3 shadow-sm border border-gray-200 text-right">
             <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Schüler</div>
             <div class="text-2xl font-black text-blue-600">{{ students.length }}</div>
@@ -245,7 +314,6 @@ onMounted(fetchStudents)
 
           <button
             @click="logout"
-
             class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-3 rounded-xl font-bold uppercase text-sm transition"
           >
             Logout
@@ -268,18 +336,12 @@ onMounted(fetchStudents)
               Schüler — {{ teacherClass }}
             </h2>
           </div>
-
-          <!-- Loading -->
           <div v-if="loadingStudents" class="flex-1 flex items-center justify-center">
             <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
           </div>
-
-          <!-- Empty -->
           <div v-else-if="students.length === 0" class="flex-1 flex items-center justify-center px-4 text-center">
             <p class="text-sm text-gray-400">Keine Schüler gefunden.</p>
           </div>
-
-          <!-- List -->
           <div v-else class="flex-1 overflow-y-auto divide-y divide-gray-50">
             <button
               v-for="student in students"
@@ -289,13 +351,13 @@ onMounted(fetchStudents)
                 'w-full text-left px-5 py-4 transition flex items-center gap-3',
                 selectedStudent?.untisId === student.untisId
                   ? 'bg-blue-600 text-white'
-                  : 'hover:bg-gray-50 text-gray-900'
+                  : 'hover:bg-gray-50 text-gray-900',
               ]"
             >
               <div
                 :class="[
                   'w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0',
-                  selectedStudent?.untisId === student.untisId ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-600'
+                  selectedStudent?.untisId === student.untisId ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-600',
                 ]"
               >
                 {{ student.firstName[0] }}{{ student.lastName[0] }}
@@ -310,54 +372,113 @@ onMounted(fetchStudents)
           </div>
         </div>
 
-        <!-- Right: Absences Panel -->
+        <!-- Right Panel -->
         <div class="flex-1 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
 
-          <!-- Class Analytics View -->
+          <!-- ── Class Analytics ─────────────────────────────────────────── -->
           <template v-if="showClassAnalytics">
-            <div class="px-6 py-5 border-b border-gray-100">
-              <h2 class="text-xl font-black text-gray-900">Klassen-Analyse</h2>
-              <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-wide font-bold">
-                Durchschnittlich versäumte Stunden der Klasse
-              </p>
+            <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 class="text-xl font-black text-gray-900">Klassen-Analyse</h2>
+                <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-wide font-bold">{{ teacherClass }}</p>
+                <p class="text-[11px] text-gray-400 mt-0.5 normal-case">
+                  Basierend auf {{ students.length }} eingeloggten Schüler{{ students.length !== 1 ? 'n' : '' }}
+                </p>
+              </div>
+              <span class="text-xs font-bold uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg">
+                Alle Absenzen
+              </span>
             </div>
+
             <div class="flex-1 overflow-auto p-6">
-              <div v-if="loadingClassAnalytics" class="h-full flex items-center justify-center">
+              <div v-if="loadingClassAnalytics" class="h-40 flex items-center justify-center">
                 <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
               </div>
-              <div v-else-if="classAnalytics.length === 0" class="h-full flex flex-col items-center justify-center text-center">
-                <div class="text-4xl mb-4">📊</div>
+              <div v-else-if="classAnalytics.stats.length === 0" class="h-40 flex flex-col items-center justify-center text-center">
+                <div class="text-4xl mb-3">📊</div>
                 <h3 class="text-lg font-bold text-gray-900">Keine Daten</h3>
                 <p class="text-sm text-gray-400 mt-1">Es wurden noch keine Absenzen für diese Klasse erfasst.</p>
               </div>
-              <div v-else>
-                <table class="w-full">
+              <template v-else>
+                <!-- Heatmap + Pie side by side -->
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                  <div class="bg-gray-50 rounded-xl p-4">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Stundenplan-Heatmap</h3>
+                    <TimetableHeatmap :cells="classAnalytics.heatmap" />
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-4">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Versäumte Stunden nach Fach</h3>
+                    <VueApexCharts
+                      type="pie"
+                      height="340"
+                      :options="{ ...pieOptions, labels: classPie.labels }"
+                      :series="classPie.series"
+                    />
+                  </div>
+                </div>
+
+                <!-- Subject stats table -->
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Fach-Übersicht</h3>
+                <table class="w-full mb-8">
                   <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Fach</th>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bezeichnung</th>
-                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Ø Versäumt</th>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Fach</th>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bezeichnung</th>
+                      <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Versäumt</th>
+                      <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Gesamt</th>
+                      <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">%</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-50">
-                    <tr v-for="stat in classAnalytics" :key="stat.subjectName" class="hover:bg-gray-50 transition">
-                      <td class="px-6 py-3 text-sm font-bold text-gray-900">{{ stat.subjectName }}</td>
-                      <td class="px-6 py-3 text-sm text-gray-600">{{ stat.subjectLongName || '—' }}</td>
-                      <td class="px-6 py-3 text-right">
-                        <span
-                          :class="['inline-flex items-center justify-center min-w-[2.5rem] px-3 py-1 rounded-full text-sm font-black', severityClass(stat.missedLessons)]"
-                        >
-                          {{ stat.missedLessons }}
+                    <tr v-for="s in classAnalytics.stats" :key="s.subjectName" class="hover:bg-gray-50 transition">
+                      <td class="px-4 py-3 text-sm font-bold text-gray-900">{{ s.subjectName }}</td>
+                      <td class="px-4 py-3 text-sm text-gray-600">{{ s.subjectLongName || '—' }}</td>
+                      <td class="px-4 py-3 text-right">
+                        <span :class="['inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-black', severityClass(s.missedLessons)]">
+                          {{ s.missedLessons }}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-right text-sm text-gray-500">{{ s.totalLessons ?? '—' }}</td>
+                      <td class="px-4 py-3 text-right">
+                        <span :class="['inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-black', percentageClass(s.percentage)]">
+                          {{ s.percentage !== null ? s.percentage + '%' : '—' }}
                         </span>
                       </td>
                     </tr>
                   </tbody>
                 </table>
-              </div>
+
+                <!-- Per-student top 3 table -->
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Top-3 Fächer pro Schüler</h3>
+                <table class="w-full">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Schüler</th>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Platz 1</th>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Platz 2</th>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Platz 3</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-50">
+                    <tr v-for="row in classAnalytics.studentTable" :key="row.untisId" class="hover:bg-gray-50 transition">
+                      <td class="px-4 py-3 text-sm font-bold text-gray-900">{{ row.lastName }}, {{ row.firstName }}</td>
+                      <td v-for="i in 3" :key="i" class="px-4 py-3 text-sm">
+                        <template v-if="row.top3[i - 1]">
+                          <span class="font-bold text-gray-800">{{ row.top3[i - 1]!.subjectName }}</span>
+                          <span class="text-gray-400 ml-1 text-xs">
+                            {{ row.top3[i - 1]!.percentage !== null ? row.top3[i - 1]!.percentage + '%' : row.top3[i - 1]!.missedLessons + 'x' }}
+                          </span>
+                        </template>
+                        <span v-else class="text-gray-300">—</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </template>
             </div>
           </template>
 
-          <!-- No student selected -->
+          <!-- ── No student selected ────────────────────────────────────── -->
           <div v-else-if="!selectedStudent" class="flex-1 flex flex-col items-center justify-center text-center px-8">
             <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
               <svg class="w-8 h-8 text-blue-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -365,27 +486,39 @@ onMounted(fetchStudents)
               </svg>
             </div>
             <h3 class="text-xl font-bold text-gray-900">Schüler auswählen</h3>
-            <p class="text-gray-400 text-sm mt-2">Klicken Sie links auf einen Schüler, um seine unterschriebenen Absenzen zu sehen.</p>
+            <p class="text-gray-400 text-sm mt-2">Klicken Sie links auf einen Schüler, um seine Absenzen zu sehen.</p>
           </div>
 
-          <!-- Student selected -->
+          <!-- ── Student selected ────────────────────────────────────────── -->
           <template v-else>
             <!-- Panel Header -->
-            <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+            <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center flex-wrap gap-3">
               <div>
                 <h2 class="text-xl font-black text-gray-900">
                   {{ selectedStudent.firstName }} {{ selectedStudent.lastName }}
                 </h2>
                 <p class="text-xs text-gray-400 mt-0.5 uppercase tracking-wide font-bold">
-                  Offene Entschuldigungen
+                  {{ showAnalytics ? 'Analyse' : 'Unterschriebene Entschuldigungen' }}
                 </p>
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 flex-wrap">
+                <!-- Open/All toggle (only in analytics mode) -->
+                <div v-if="showAnalytics" class="flex items-center bg-gray-100 rounded-lg p-1">
+                  <button
+                    @click="setAnalyticsMode('open')"
+                    :class="['px-4 py-1.5 rounded-md text-xs font-bold uppercase transition', analyticsMode === 'open' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700']"
+                  >Offen</button>
+                  <button
+                    @click="setAnalyticsMode('all')"
+                    :class="['px-4 py-1.5 rounded-md text-xs font-bold uppercase transition', analyticsMode === 'all' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700']"
+                  >Alle</button>
+                </div>
+                <!-- Analyse / Absenzen toggle -->
                 <button
                   @click="toggleAnalytics"
                   :class="[
                     'px-4 py-2 rounded-lg font-bold uppercase text-xs transition',
-                    showAnalytics ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                    showAnalytics ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-900',
                   ]"
                 >
                   {{ showAnalytics ? 'Absenzen' : 'Analyse' }}
@@ -396,88 +529,108 @@ onMounted(fetchStudents)
               </div>
             </div>
 
-            <!-- Analytics -->
+            <!-- ── Student Analytics ──────────────────────────────────────── -->
             <div v-if="showAnalytics" class="flex-1 overflow-auto p-6">
-              <div v-if="loadingAnalytics" class="h-full flex items-center justify-center">
+              <div v-if="loadingAnalytics" class="h-40 flex items-center justify-center">
                 <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
               </div>
-              <div v-else-if="analytics.length === 0" class="h-full flex flex-col items-center justify-center text-center">
-                <div class="text-4xl mb-4">📊</div>
+              <div v-else-if="analytics.stats.length === 0" class="h-40 flex flex-col items-center justify-center text-center">
+                <div class="text-4xl mb-3">📊</div>
                 <h3 class="text-lg font-bold text-gray-900">Keine Daten</h3>
                 <p class="text-sm text-gray-400 mt-1">Für diesen Schüler wurden noch keine Stunden-Absenzen erfasst.</p>
               </div>
-              <div v-else>
-                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Versäumte Stunden pro Fach</h3>
+              <template v-else>
+                <!-- Heatmap + Pie -->
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                  <div class="bg-gray-50 rounded-xl p-4">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Stundenplan-Heatmap</h3>
+                    <TimetableHeatmap :cells="analytics.heatmap" />
+                  </div>
+                  <div class="bg-gray-50 rounded-xl p-4">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Versäumte Stunden nach Fach</h3>
+                    <VueApexCharts
+                      type="pie"
+                      height="340"
+                      :options="{ ...pieOptions, labels: studentPie.labels }"
+                      :series="studentPie.series"
+                    />
+                  </div>
+                </div>
+
+                <!-- Detail table -->
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Fach-Detail</h3>
                 <table class="w-full">
                   <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Fach</th>
-                      <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bezeichnung</th>
-                      <th class="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Versäumt</th>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Fach</th>
+                      <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bezeichnung</th>
+                      <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Versäumt</th>
+                      <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Gesamt</th>
+                      <th class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">%</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-50">
-                    <tr v-for="stat in analytics" :key="stat.subjectName" class="hover:bg-gray-50 transition">
-                      <td class="px-6 py-3 text-sm font-bold text-gray-900">{{ stat.subjectName }}</td>
-                      <td class="px-6 py-3 text-sm text-gray-600">{{ stat.subjectLongName || '—' }}</td>
-                      <td class="px-6 py-3 text-right">
-                        <span
-                          :class="['inline-flex items-center justify-center min-w-[2.5rem] px-3 py-1 rounded-full text-sm font-black', severityClass(stat.missedLessons)]"
-                        >
-                          {{ stat.missedLessons }}
+                    <tr v-for="s in analytics.stats" :key="s.subjectName" class="hover:bg-gray-50 transition">
+                      <td class="px-4 py-3 text-sm font-bold text-gray-900">{{ s.subjectName }}</td>
+                      <td class="px-4 py-3 text-sm text-gray-600">{{ s.subjectLongName || '—' }}</td>
+                      <td class="px-4 py-3 text-right">
+                        <span :class="['inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-black', severityClass(s.missedLessons)]">
+                          {{ s.missedLessons }}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-right text-sm text-gray-500">{{ s.totalLessons ?? '—' }}</td>
+                      <td class="px-4 py-3 text-right">
+                        <span :class="['inline-flex items-center justify-center min-w-[2.5rem] px-2 py-0.5 rounded-full text-xs font-black', percentageClass(s.percentage)]">
+                          {{ s.percentage !== null ? s.percentage + '%' : '—' }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </template>
+            </div>
+
+            <!-- ── Absences list ──────────────────────────────────────────── -->
+            <template v-else>
+              <div v-if="loadingAbsences" class="flex-1 flex items-center justify-center">
+                <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+              </div>
+              <div v-else-if="activeAbsences.length === 0" class="flex-1 flex flex-col items-center justify-center text-center px-8">
+                <div class="text-4xl mb-4">✓</div>
+                <h3 class="text-lg font-bold text-gray-900">Keine Einträge</h3>
+                <p class="text-sm text-gray-400 mt-1">Es wurden keine entsprechenden Absenzen gefunden.</p>
+              </div>
+              <div v-else class="flex-1 overflow-auto">
+                <table class="w-full">
+                  <thead class="bg-gray-50 border-b border-gray-100 sticky top-0">
+                    <tr>
+                      <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
+                      <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
+                      <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
+                      <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
+                      <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-50">
+                    <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50 transition">
+                      <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                      <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
+                      <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
+                      <td class="px-6 py-4 text-center">
+                        <button @click="viewAttachments(absence)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
+                          Ansehen
+                        </button>
+                      </td>
+                      <td class="px-6 py-4 text-center">
+                        <span class="inline-flex items-center gap-1.5 text-green-700 text-xs font-bold">
+                          <span class="w-2 h-2 rounded-full bg-green-600"></span>
+                          Unterschrieben
                         </span>
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-            </div>
-
-            <template v-else>
-            <!-- Loading -->
-            <div v-if="loadingAbsences" class="flex-1 flex items-center justify-center">
-              <div class="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-            </div>
-
-            <!-- Empty -->
-            <div v-else-if="activeAbsences.length === 0" class="flex-1 flex flex-col items-center justify-center text-center px-8">
-              <div class="text-4xl mb-4">✓</div>
-              <h3 class="text-lg font-bold text-gray-900">Keine Einträge</h3>
-              <p class="text-sm text-gray-400 mt-1">Es wurden keine entsprechenden Absenzen gefunden.</p>
-            </div>
-
-            <!-- Absences Table -->
-            <div v-else class="flex-1 overflow-auto">
-              <table class="w-full">
-                <thead class="bg-gray-50 border-b border-gray-100 sticky top-0">
-                <tr>
-                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
-                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Von</th>
-                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Bis</th>
-                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Details</th>
-                  <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
-                </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-50">
-                <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50 transition">
-                  <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
-                  <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.startTime) }}</td>
-                  <td class="px-6 py-4 text-sm text-gray-700">{{ formatTime(absence.endTime) }}</td>
-                  <td class="px-6 py-4 text-center">
-                    <button @click="viewAttachments(absence)" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition">
-                      Ansehen
-                    </button>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                      <span class="inline-flex items-center gap-1.5 text-green-700 text-xs font-bold">
-                        <span class="w-2 h-2 rounded-full bg-green-600"></span>
-                        Unterschrieben
-                      </span>
-                  </td>
-                </tr>
-                </tbody>
-              </table>
-            </div>
             </template>
           </template>
 
@@ -501,7 +654,6 @@ onMounted(fetchStudents)
               {{ activeExcuseMessage || 'Keine Begründung angegeben' }}
             </p>
           </div>
-
           <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Anhänge</h4>
           <div v-if="loadingAttachments" class="text-sm text-gray-500">Lade Anhänge...</div>
           <div v-else-if="activeAttachments.length === 0" class="text-sm text-gray-500 italic">Keine Anhänge verfügbar.</div>
