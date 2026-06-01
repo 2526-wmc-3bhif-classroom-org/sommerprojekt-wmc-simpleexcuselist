@@ -264,12 +264,7 @@ const login = async () => {
           </div>
         </form>
 
-        <!-- Safe info text (spaced-out bottom margin) -->
-        <div class="mt-10 text-center border-t border-slate-100 dark:border-slate-800/80 pt-8 transition-colors duration-300">
-          <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider transition-colors duration-300">
-            🔒 Verbindung verschlüsselt direkt zu WebUntis
-          </p>
-        </div>
+
 
       </div>
       
