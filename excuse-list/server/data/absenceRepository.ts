@@ -10,7 +10,10 @@ export function syncAbsences(db: Unit, absences: any[], personId: number): any[]
   `);
 
   for (const a of absences) {
-    const isExcused = (a.isExcused !== false || a.excuseStatus) ? 1 : 0;
+    // "Excused/closed in WebUntis". Undefined isExcused is treated as NOT
+    // excused (still open) so it surfaces to the student — matches
+    // resolveAbsenceStatus in analyticsRepository.
+    const isExcused = (a.isExcused === true || a.excuseStatus) ? 1 : 0;
     stmt.run(
       crypto.randomUUID(),
       a.id,

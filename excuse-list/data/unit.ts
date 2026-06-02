@@ -99,6 +99,21 @@ export class DB {
     }
 
     DB.createCurrentSchema(connection);
+    DB.runMigrations(connection);
+  }
+
+  private static runMigrations(connection: Database): void {
+    const absenceLessonColumns = DB.getTableColumns(connection, "AbsenceLesson");
+    if (!absenceLessonColumns.includes("absenceStatus")) {
+      connection.exec(`ALTER TABLE AbsenceLesson ADD COLUMN absenceStatus TEXT NOT NULL DEFAULT 'open'`);
+      connection.exec(`CREATE INDEX IF NOT EXISTS idx_absencelesson_status ON AbsenceLesson(absenceStatus)`);
+    }
+
+    // Drop superseded analytics tables: the per-student ScheduledLesson and the
+    // aggregate ClassLessonTotal were replaced by the shared, incrementally
+    // synced ClassScheduledLesson + ClassSyncState.
+    connection.exec(`DROP TABLE IF EXISTS ScheduledLesson`);
+    connection.exec(`DROP TABLE IF EXISTS ClassLessonTotal`);
   }
 
   private static rebuildDatabase(connection: Database): void {
@@ -208,13 +223,33 @@ export class DB {
         endTime         INTEGER NOT NULL,
         subjectName     TEXT NOT NULL,
         subjectLongName TEXT NOT NULL DEFAULT '',
+        absenceStatus   TEXT NOT NULL DEFAULT 'open',
         createdAt       TEXT DEFAULT CURRENT_TIMESTAMP,
 
         FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS ClassScheduledLesson
+      (
+        id              TEXT PRIMARY KEY,
+        className       TEXT NOT NULL,
+        date            INTEGER NOT NULL,
+        startTime       INTEGER NOT NULL,
+        endTime         INTEGER NOT NULL,
+        subjectName     TEXT NOT NULL,
+        subjectLongName TEXT NOT NULL DEFAULT ''
+      );
+
+      CREATE TABLE IF NOT EXISTS ClassSyncState
+      (
+        className  TEXT PRIMARY KEY,
+        lastSynced INTEGER NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_student_class ON Student(className);
       CREATE INDEX IF NOT EXISTS idx_absencelesson_student ON AbsenceLesson(studentUntisId);
+      CREATE INDEX IF NOT EXISTS idx_classscheduled_subject ON ClassScheduledLesson(className, subjectName, date);
+      CREATE INDEX IF NOT EXISTS idx_classscheduled_date ON ClassScheduledLesson(className, date);
       CREATE INDEX IF NOT EXISTS idx_absence_student ON Absence(studentUntisId);
       CREATE INDEX IF NOT EXISTS idx_absence_status ON Absence(status);
       CREATE INDEX IF NOT EXISTS idx_studentparent_parent ON StudentParent(parentId);
