@@ -60,3 +60,26 @@ export async function seedMockTeacher() {
     console.error('Failed to seed mock teacher:', err);
   }
 }
+
+export function getTeacherByClass(db: Unit, className: string) {
+  return db.prepare(`SELECT id FROM Teacher WHERE className = ?`).get(className) as any;
+}
+
+export async function createTeacherForClass(db: Unit, className: string) {
+  const username = `prof${className.toLowerCase()}`;
+  const passwordHash = await bcrypt.hash('lehrer1234', 10);
+  const name = `Prof. ${className}`;
+  const id = crypto.randomUUID();
+
+  db.prepare(`
+    INSERT INTO Teacher (id, username, passwordHash, name, className)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, username, passwordHash, name, className);
+
+  console.log(`\n==============================================`);
+  console.log(`New Teacher Account Created for Class: ${className}`);
+  console.log(`Username: ${username}`);
+  console.log(`Password: lehrer1234`);
+  console.log(`==============================================\n`);
+}
+

@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { seedMockTeacher } from '../data/teacherRepository';
 import authRouter from './authRouter';
 import studentRouter from './studentRouter';
 import parentRouter from './parentRouter';
@@ -23,7 +22,6 @@ app.use(parentRouter);
 app.use(teacherRouter);
 app.use(attachmentRouter);
 
-app.listen(port, async () => {
+app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
-  await seedMockTeacher();
 });

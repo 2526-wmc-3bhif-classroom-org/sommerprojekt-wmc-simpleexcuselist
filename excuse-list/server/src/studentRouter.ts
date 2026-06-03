@@ -15,8 +15,8 @@ router.get('/api/absences', verifyJwt, async (req, res) => {
     const absences = getAbsencesByStudent(req.user!.untisId!);
     console.log(`Fetched ${absences.length} total absences`);
 
-    const unexcused = absences.filter((a) => a.status === 'open' && a.isExcusedUntis === 0);
-    console.log(`Filtered to ${unexcused.length} unexcused absences`);
+    const unexcused = absences.filter((a) => a.status === 'open');
+    console.log(`Filtered to ${unexcused.length} open absences`);
 
     res.json(unexcused);
   } catch (error: any) {

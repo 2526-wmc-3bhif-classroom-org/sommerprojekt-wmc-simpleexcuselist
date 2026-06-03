@@ -27,6 +27,8 @@ import {
   createParentAccount,
 } from '../data/parentRepository';
 import { syncAbsences } from '../data/absenceRepository';
+import { getTeacherByClass, createTeacherForClass } from '../data/teacherRepository';
+
 
 const router = Router();
 
@@ -191,7 +193,13 @@ router.post('/api/login', async (req, res) => {
           console.log(`==============================================\n`);
         }
 
+        const existingTeacher = getTeacherByClass(db, className);
+        if (!existingTeacher) {
+          await createTeacherForClass(db, className);
+        }
+
         absences = syncAbsences(db, untisAbsences, personId);
+
 
         const token = jwt.sign(
           { untisId: personId, username, role: 'student' },
