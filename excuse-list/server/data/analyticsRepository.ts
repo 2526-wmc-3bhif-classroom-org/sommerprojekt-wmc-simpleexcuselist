@@ -49,6 +49,7 @@ interface NormalizedAbsence {
   startTime: number;
   endTime: number;
   absenceStatus: string;
+  subject?: string;
 }
 
 // Maps WebUntis absence fields to a status string for AbsenceLesson
@@ -64,6 +65,7 @@ function normalizeAbsences(absences: any[]): NormalizedAbsence[] {
       startTime: Number(a.startTime ?? 0),
       endTime: Number(a.endTime ?? 0),
       absenceStatus: resolveAbsenceStatus(a),
+      subject: a.subject,
     }))
     .filter((a) => Number.isFinite(a.date) && a.date > 0);
 }
@@ -176,7 +178,12 @@ export function syncAbsenceLessons(
 
   let count = 0;
   for (const l of classLessons) {
-    const abs = normAbsences.find((a) => lessonOverlapsAbsence(l, a));
+    const abs = normAbsences.find((a) => {
+      const timeOverlap = lessonOverlapsAbsence(l, a);
+      if (!timeOverlap) return false;
+      if (a.subject && a.subject.toUpperCase() !== l.subjectName.toUpperCase()) return false;
+      return true;
+    });
     if (!abs) continue;
     stmt.run(
       crypto.randomUUID(),

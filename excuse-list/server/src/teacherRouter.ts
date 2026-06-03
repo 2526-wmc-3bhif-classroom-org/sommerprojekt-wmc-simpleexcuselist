@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { Unit } from '../../data/unit';
 import { verifyJwt } from '../middleware/auth';
 import { requireTeacher } from '../middleware/roleGuard';
 import { getStudentsByClass, getStudentSignedAbsences } from '../data/teacherRepository';
+
 import {
   getSubjectAbsenceStats,
   getStudentHeatmapData,
@@ -32,7 +34,16 @@ router.get('/api/teacher/students/:studentId/absences', verifyJwt, requireTeache
       return res.status(404).json({ error: 'Student not found in your class' });
     }
 
-    res.json(absences);
+    const db = new Unit(true);
+    const totalRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?`).get(studentId) as any;
+    const unexcusedRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')`).get(studentId) as any;
+    db.complete(null);
+
+    res.json({
+      absences,
+      totalHours: totalRow?.count ?? 0,
+      unexcusedHours: unexcusedRow?.count ?? 0
+    });
   } catch (error: any) {
     console.error('Error fetching student absences:', error.message);
     res.status(500).json({ error: 'Error fetching absences', details: error.message });
