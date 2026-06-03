@@ -1,6 +1,8 @@
+<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import LightingMode from '@/components/LightingMode.vue';
+
 import VueApexCharts from 'vue3-apexcharts';
 import type { ApexOptions } from 'apexcharts';
 import TimetableHeatmap from '@/components/TimetableHeatmap.vue';
@@ -381,8 +383,9 @@ const percentageClass = (p: number | null) => {
           </div>
         </div>
 
-        <!-- List View -->
         <div v-else class="space-y-4">
+          <!-- List View -->
+
           <!-- Filter Bar -->
           <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 p-4 rounded-2xl shadow-sm transition-colors duration-300">
             <div class="relative w-full">
@@ -457,7 +460,8 @@ const percentageClass = (p: number | null) => {
         </div>
 
       </div>
-    </main>
+    </div>
+  </main>
 
     <!-- Slide-over Drawer Backdrop overlay -->
     <div
