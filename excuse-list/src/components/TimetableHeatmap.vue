@@ -5,6 +5,7 @@ interface HeatmapCell {
   dayOfWeek: number // 0=Mon … 4=Fri
   period: number // 0–16 (EH)
   count: number
+  subjects?: string[]
 }
 
 const props = defineProps<{ cells: HeatmapCell[] }>()
@@ -38,8 +39,17 @@ const grid = computed<number[][]>(() => {
   return g
 })
 
-const cellCount = (p: number, d: number): number => grid.value[p]?.[d] ?? 0
+const getCell = (p: number, d: number): HeatmapCell | undefined =>
+  props.cells.find((c) => c.period === p && c.dayOfWeek === d)
+
+const cellCount = (p: number, d: number): number => getCell(p, d)?.count ?? 0
 const timeLabel = (p: number): string => TIMES[p] ?? ''
+
+const cellSubjectsLabel = (p: number, d: number): string => {
+  const cell = getCell(p, d)
+  if (!cell || !cell.subjects || cell.subjects.length === 0) return ''
+  return ` (${cell.subjects.join(', ')})`
+}
 
 // Proportional shading (spec Q7/Q13): empty = near-white, busiest cell = full blue.
 function cellStyle(count: number) {
@@ -76,7 +86,7 @@ function cellStyle(count: number) {
           :key="di"
           class="h-9 rounded-md flex items-center justify-center text-[11px] font-bold tabular-nums border border-gray-100"
           :style="cellStyle(cellCount(p, di))"
-          :title="`${day}, ${p}. EH — ${cellCount(p, di)} Fehlstunden`"
+          :title="`${day}, ${p}. EH — ${cellCount(p, di)} Fehlstunden${cellSubjectsLabel(p, di)}`"
         >
           <span v-if="cellCount(p, di) > 0">{{ cellCount(p, di) }}</span>
         </div>
@@ -88,3 +98,4 @@ function cellStyle(count: number) {
     </p>
   </div>
 </template>
+

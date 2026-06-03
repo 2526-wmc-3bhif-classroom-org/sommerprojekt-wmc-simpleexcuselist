@@ -1,7 +1,30 @@
-<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import LightingMode from '@/components/LightingMode.vue';
+import VueApexCharts from 'vue3-apexcharts';
+import type { ApexOptions } from 'apexcharts';
+import TimetableHeatmap from '@/components/TimetableHeatmap.vue';
+
+interface SubjectStat {
+  subjectName: string;
+  subjectLongName: string;
+  missedLessons: number;
+  totalLessons: number | null;
+  percentage: number | null;
+}
+
+interface HeatmapCell {
+  dayOfWeek: number;
+  period: number;
+  count: number;
+  subjects?: string[];
+}
+
+interface AnalyticsPayload {
+  stats: SubjectStat[];
+  heatmap: HeatmapCell[];
+}
+
 
 interface Absence {
   id: string;
@@ -163,7 +186,70 @@ const submitExcuse = async () => {
     submitting.value = false;
   }
 };
+
+// --- Analytics State & Methods ---
+const showAnalytics = ref(false);
+const analyticsMode = ref<'open' | 'all'>('open');
+const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [] });
+const loadingAnalytics = ref(false);
+
+const fetchAnalytics = async () => {
+  const token = localStorage.getItem('untis_jwt');
+  if (!token) { router.push('/'); return; }
+  loadingAnalytics.value = true;
+  try {
+    const res = await fetch(`/api/student/analytics?mode=${analyticsMode.value}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`Fehler beim Laden der Analyse (${res.status})`);
+    analytics.value = await res.json();
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Analyse';
+  } finally {
+    loadingAnalytics.value = false;
+  }
+};
+
+const toggleAnalytics = () => {
+  showAnalytics.value = !showAnalytics.value;
+  if (showAnalytics.value) fetchAnalytics();
+};
+
+const setAnalyticsMode = (mode: 'open' | 'all') => {
+  analyticsMode.value = mode;
+  fetchAnalytics();
+};
+
+function buildPieSeries(stats: SubjectStat[]) {
+  return {
+    series: stats.map((s) => s.missedLessons),
+    labels: stats.map((s) => s.subjectName),
+  };
+}
+
+const studentPie = computed(() => buildPieSeries(analytics.value.stats));
+
+const pieOptions: ApexOptions = {
+  chart: { type: 'pie', toolbar: { show: false } },
+  legend: { position: 'bottom' },
+  tooltip: { y: { formatter: (v: number) => `${v} Fehlstunden` } },
+  dataLabels: { formatter: (v: number) => `${Math.round(Number(v))}%` },
+};
+
+const severityClass = (n: number) => {
+  if (n <= 2) return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400';
+  if (n <= 5) return 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400';
+  return 'bg-red-50 text-red-700 dark:bg-red-955/20 dark:text-red-400';
+};
+
+const percentageClass = (p: number | null) => {
+  if (p === null) return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+  if (p <= 20) return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400';
+  if (p <= 40) return 'bg-amber-50 text-amber-700 dark:bg-amber-955/20 dark:text-amber-400';
+  return 'bg-red-50 text-red-700 dark:bg-red-955/20 dark:text-red-400';
+};
 </script>
+
 
 <template>
   <div class="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
@@ -189,40 +275,133 @@ const submitExcuse = async () => {
     <main class="flex-1 w-full px-6 md:px-12 py-10 space-y-6">
       
       <!-- Dashboard Title Block -->
-      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
-          <h2 class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Meine Fehlstunden</h2>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            {{ showAnalytics ? 'Analyse' : 'Meine Fehlstunden' }}
+          </h2>
           <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Du hast aktuell <span class="font-bold text-primary">{{ absences.length }}</span> offene Fehlstunde{{ absences.length === 1 ? '' : 'n' }}.
+            <template v-if="!showAnalytics">
+              Du hast aktuell <span class="font-bold text-primary">{{ absences.length }}</span> offene Fehlstunde{{ absences.length === 1 ? '' : 'n' }}.
+            </template>
+            <template v-else>
+              Stundenplan- und Fachstatistiken deiner Abwesenheiten.
+            </template>
           </p>
         </div>
-        <button @click="fetchAbsences" class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold px-3.5 py-2 text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer">
-          <svg class="w-3.5 h-3.5 text-slate-450" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          Aktualisieren
-        </button>
-      </div>
-
-      <!-- Filter Bar -->
-      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 p-4 rounded-2xl shadow-sm transition-colors duration-300">
-        <div class="relative w-full">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+        <div class="flex items-center gap-3 flex-wrap">
+          <!-- Open/All toggle (analytics only) -->
+          <div v-if="showAnalytics" class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
+            <button @click="setAnalyticsMode('open')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'open' ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Offen</button>
+            <button @click="setAnalyticsMode('all')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'all' ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Alle</button>
           </div>
-          <input
-            v-model="searchFilter"
-            type="text"
-            placeholder="Nach Datum oder Uhrzeit filtern (z.B. 15.01...)"
-            class="block w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm transition-all"
-          />
+          <!-- List/Analytics toggle -->
+          <div class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
+            <button @click="showAnalytics = false" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', !showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Liste</button>
+            <button @click="toggleAnalytics" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Analyse</button>
+          </div>
+          <button v-if="!showAnalytics" @click="fetchAbsences" class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold px-3.5 py-2 text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-slate-450" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Aktualisieren
+          </button>
         </div>
       </div>
 
       <!-- Content Area -->
       <div class="space-y-4">
         
-        <div v-if="loading" class="flex justify-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-900 transition-colors duration-300">
+        <!-- Analytics View -->
+        <div v-if="showAnalytics" class="space-y-6">
+          <div v-if="loadingAnalytics" class="flex justify-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-900 transition-colors duration-300">
+            <div class="w-7 h-7 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
+          </div>
+          <div v-else-if="analytics.stats.length === 0" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-900 p-10 flex flex-col items-center text-center transition-colors duration-300">
+            <div class="w-12 h-12 bg-emerald-50 dark:bg-emerald-950/20 rounded-full flex items-center justify-center mb-3 border border-emerald-100 dark:border-emerald-900/35 shadow-sm">
+              <svg class="w-6 h-6 text-emerald-505" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 class="text-base font-bold text-slate-955 dark:text-white tracking-tight">Keine Fehlstunden in der Analyse</h3>
+            <p class="text-slate-500 dark:text-slate-400 text-xs mt-1.5 max-w-xs leading-relaxed">
+              Für den ausgewählten Zeitraum bzw. Modus sind keine Fehlstunden erfasst.
+            </p>
+          </div>
+          <div v-else class="space-y-6">
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <!-- Heatmap -->
+              <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 shadow-sm transition-colors overflow-hidden">
+                <h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Stundenplan-Heatmap</h3>
+                <TimetableHeatmap :cells="analytics.heatmap" />
+              </div>
+              <!-- Pie Chart -->
+              <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 shadow-sm transition-colors flex flex-col overflow-hidden">
+                <h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Versäumte Stunden nach Fach</h3>
+                <div class="flex-1 flex items-center justify-center min-h-[320px]">
+                  <VueApexCharts class="w-full" type="pie" height="320" :options="{ ...pieOptions, labels: studentPie.labels }" :series="studentPie.series" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Subject Detail Table -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 rounded-2xl shadow-sm overflow-hidden transition-colors">
+              <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Fach-Detail</h3>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left border-collapse">
+                  <thead class="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                    <tr>
+                      <th class="px-6 py-3.5">Fach</th>
+                      <th class="px-6 py-3.5">Bezeichnung</th>
+                      <th class="px-6 py-3.5 text-right">Versäumt</th>
+                      <th class="px-6 py-3.5 text-right">Gesamt</th>
+                      <th class="px-6 py-3.5 text-right">%</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100 dark:divide-slate-850">
+                    <tr v-for="s in analytics.stats" :key="s.subjectName" class="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
+                      <td class="px-6 py-3.5 font-bold text-slate-900 dark:text-white">{{ s.subjectName }}</td>
+                      <td class="px-6 py-3.5 text-slate-600 dark:text-slate-400">{{ s.subjectLongName || '—' }}</td>
+                      <td class="px-6 py-3.5 text-right">
+                        <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold', severityClass(s.missedLessons)]">
+                          {{ s.missedLessons }}
+                        </span>
+                      </td>
+                      <td class="px-6 py-3.5 text-right text-slate-500 dark:text-slate-400">{{ s.totalLessons ?? '—' }}</td>
+                      <td class="px-6 py-3.5 text-right">
+                        <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold', percentageClass(s.percentage)]">
+                          {{ s.percentage !== null ? s.percentage + '%' : '—' }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- List View -->
+        <div v-else class="space-y-4">
+          <!-- Filter Bar -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 p-4 rounded-2xl shadow-sm transition-colors duration-300">
+            <div class="relative w-full">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                v-model="searchFilter"
+                type="text"
+                placeholder="Nach Datum oder Uhrzeit filtern (z.B. 15.01...)"
+                class="block w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm transition-all"
+              />
+            </div>
+          </div>
+
+          <div v-if="loading" class="flex justify-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-900 transition-colors duration-300">
+
           <div class="w-7 h-7 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
         </div>
 

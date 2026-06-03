@@ -222,6 +222,7 @@ export interface HeatmapCell {
   dayOfWeek: number;   // 0=Mon … 4=Fri
   period: number;      // 0–16
   count: number;
+  subjects?: string[];
 }
 
 interface DateWindow {
@@ -369,7 +370,7 @@ export function getStudentHeatmapData(
 
   const rows = db
     .prepare(`
-      SELECT al.date, al.startTime, al.endTime
+      SELECT al.date, al.startTime, al.endTime, al.subjectName
       FROM AbsenceLesson al
       WHERE al.studentUntisId = ? ${statusFilter(mode)}
     `)
@@ -414,7 +415,7 @@ export function getClassHeatmapData(
 
   const rows = db
     .prepare(`
-      SELECT al.date, al.startTime, al.endTime
+      SELECT al.date, al.startTime, al.endTime, al.subjectName
       FROM AbsenceLesson al
       JOIN Student s ON al.studentUntisId = s.untisId
       WHERE s.className = ? ${statusFilter(mode)}
@@ -456,8 +457,8 @@ export function getClassStudentTable(
 
 // ─── Heatmap builder ─────────────────────────────────────────────────────────
 
-function buildHeatmap(rows: { date: number; startTime: number; endTime: number }[]): HeatmapCell[] {
-  const map = new Map<string, number>();
+function buildHeatmap(rows: { date: number; startTime: number; endTime: number; subjectName?: string }[]): HeatmapCell[] {
+  const map = new Map<string, { count: number; subjects: Set<string> }>();
 
   for (const row of rows) {
     const day = dateToDayOfWeek(row.date);
@@ -465,14 +466,24 @@ function buildHeatmap(rows: { date: number; startTime: number; endTime: number }
     const periods = getOverlappingPeriods(row.startTime, row.endTime);
     for (const period of periods) {
       const key = `${day}-${period}`;
-      map.set(key, (map.get(key) ?? 0) + 1);
+      const existing = map.get(key) ?? { count: 0, subjects: new Set<string>() };
+      existing.count += 1;
+      if (row.subjectName) {
+        existing.subjects.add(row.subjectName);
+      }
+      map.set(key, existing);
     }
   }
 
   const cells: HeatmapCell[] = [];
-  for (const [key, count] of map) {
+  for (const [key, val] of map) {
     const [d, p] = key.split('-').map(Number);
-    cells.push({ dayOfWeek: d!, period: p!, count });
+    cells.push({
+      dayOfWeek: d!,
+      period: p!,
+      count: val.count,
+      subjects: Array.from(val.subjects),
+    });
   }
   return cells;
 }

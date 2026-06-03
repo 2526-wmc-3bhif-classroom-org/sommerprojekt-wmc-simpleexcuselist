@@ -5,6 +5,8 @@ import { requireStudent } from '../middleware/roleGuard';
 import { getAbsencesByStudent } from '../data/absenceRepository';
 import { getStudentParent, } from '../data/parentRepository';
 import { updateAbsenceWithExcuse, insertAttachments } from '../data/excuseRepository';
+import { getSubjectAbsenceStats, getStudentHeatmapData, AnalyticsMode } from '../data/analyticsRepository';
+
 
 const router = Router();
 
@@ -58,5 +60,28 @@ router.post('/api/excuses/submit', verifyJwt, requireStudent, async (req, res) =
     res.status(500).json({ error: 'Fehler beim Einreichen der Entschuldigung' });
   }
 });
+
+router.get('/api/student/analytics', verifyJwt, requireStudent, async (req, res) => {
+  try {
+    const mode: AnalyticsMode = req.query.mode === 'all' ? 'all' : 'open';
+    const studentId = req.user!.untisId!;
+
+    const db = new Unit(true);
+    const student = db.prepare(`SELECT className FROM Student WHERE untisId = ?`).get(studentId) as any;
+    db.complete(null);
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student nicht gefunden' });
+    }
+
+    const stats = getSubjectAbsenceStats(studentId, student.className, mode);
+    const heatmap = getStudentHeatmapData(studentId, student.className, mode);
+    res.json({ stats, heatmap });
+  } catch (error: any) {
+    console.error('Error fetching student analytics:', error.message);
+    res.status(500).json({ error: 'Fehler beim Laden der Analyse', details: error.message });
+  }
+});
+
 
 export default router;
