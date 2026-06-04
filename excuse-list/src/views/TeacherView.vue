@@ -515,7 +515,24 @@ onMounted(fetchStudents)
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
             <!-- Analytics -->
             <div v-if="showAnalytics" class="flex-1 flex flex-col min-h-0">
-              <div v-if="loadingAnalytics" class="p-12 flex-grow flex items-center justify-center">
+              <!-- Summary Bar (Total Hours) -->
+              <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Gesamte Fehlstunden:</span>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-primary/10 text-primary border border-primary/20">
+                    {{ totalHours }} EH
+                  </span>
+                </div>
+                <div class="h-4 w-px bg-gray-200"></div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-550 uppercase tracking-wider">Davon unentschuldigt:</span>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                    {{ unexcusedHours }} EH
+                  </span>
+                </div>
+              </div>
+
+              <div v-if="loadingAnalytics" class="p-12 flex-grow flex items-center justify-center bg-white">
                 <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
               </div>
               <div v-else-if="analytics.stats.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center text-center">
