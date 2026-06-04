@@ -560,77 +560,66 @@ onMounted(fetchStudents)
             </div>
 
             <!-- List -->
-            <div v-else class="flex-1 flex flex-col min-h-0">
-              <div v-if="loadingAbsences" class="p-12 flex-grow flex items-center justify-center">
+            <div v-else class="flex-1 flex flex-col min-h-0 bg-slate-50">
+              <div v-if="loadingAbsences" class="p-12 flex-grow flex items-center justify-center bg-white">
                 <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
               </div>
-              <div v-else-if="activeAbsences.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center">
-                <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
-                  <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                </div>
-                <p class="text-gray-500 text-sm font-medium">Alle Absenzen wurden bearbeitet.</p>
-              </div>
               <div v-else class="flex-grow flex flex-col min-h-0">
-                <!-- Summary Card (Total Hours) -->
-                <div class="p-6 bg-slate-50 border-b border-gray-200 flex gap-6 items-center flex-shrink-0">
-                  <div class="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center shadow-sm">
-                    <div class="p-3 bg-primary/10 rounded-lg text-primary mr-4">
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Gesamte Fehlstunden</span>
-                      <span class="text-2xl font-black text-gray-900 leading-none mt-1 inline-block">{{ totalHours }} EH</span>
-                    </div>
+                <!-- Summary Bar (Total Hours) -->
+                <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Gesamte Fehlstunden:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-primary/10 text-primary border border-primary/20">
+                      {{ totalHours }} EH
+                    </span>
                   </div>
-
-                  <div class="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center shadow-sm">
-                    <div class="p-3 bg-red-100 text-red-650 rounded-lg mr-4">
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Davon unentschuldigt</span>
-                      <span class="text-2xl font-black text-red-650 leading-none mt-1 inline-block">{{ unexcusedHours }} EH</span>
-                    </div>
+                  <div class="h-4 w-px bg-gray-200"></div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-550 uppercase tracking-wider">Davon unentschuldigt:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                      {{ unexcusedHours }} EH
+                    </span>
                   </div>
                 </div>
 
-                <div class="flex-grow overflow-y-auto min-h-0">
+                <div v-if="activeAbsences.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center bg-white">
+                  <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  </div>
+                  <p class="text-gray-500 text-sm font-medium">Alle Absenzen wurden bearbeitet.</p>
+                </div>
+                <div v-else class="flex-grow overflow-y-auto min-h-0 bg-white">
                   <table class="w-full text-sm text-left border-collapse">
-
-                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
-                    <tr>
-                      <th class="px-6 py-3 font-semibold">Datum</th>
-                      <th class="px-6 py-3 font-semibold">Von</th>
-                      <th class="px-6 py-3 font-semibold">Bis</th>
-                      <th class="px-6 py-3 font-semibold text-center">Status</th>
-                      <th class="px-6 py-3 font-semibold text-right">Aktion</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100 bg-white">
-                    <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
-                      <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
-                      <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
-                      <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
-                      <td class="px-6 py-4 text-center">
-                        <span class="inline-flex items-center gap-1.5 text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-semibold border border-green-200">Unterschrieben</span>
-                      </td>
-                      <td class="px-6 py-4 text-right">
-                        <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">Ansehen</button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold">Datum</th>
+                        <th class="px-6 py-3 font-semibold">Von</th>
+                        <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold text-center">Status</th>
+                        <th class="px-6 py-3 font-semibold text-right">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-center">
+                          <span class="inline-flex items-center gap-1.5 text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-semibold border border-green-200">Unterschrieben</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                          <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">Ansehen</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </main>
+    </main>
 
     <!-- Details Modal -->
     <div v-if="showAttachmentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4" @click.self="closeAttachmentModal">

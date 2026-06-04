@@ -28,6 +28,7 @@ router.get('/api/teacher/students', verifyJwt, requireTeacher, async (req, res) 
 router.get('/api/teacher/students/:studentId/absences', verifyJwt, requireTeacher, async (req, res) => {
   try {
     const { studentId } = req.params;
+    const studentIdNum = Number(studentId);
     const absences = getStudentSignedAbsences(studentId, req.user!.className!);
 
     if (absences === null) {
@@ -35,8 +36,8 @@ router.get('/api/teacher/students/:studentId/absences', verifyJwt, requireTeache
     }
 
     const db = new Unit(true);
-    const totalRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?`).get(studentId) as any;
-    const unexcusedRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')`).get(studentId) as any;
+    const totalRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?`).get(studentIdNum) as any;
+    const unexcusedRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')`).get(studentIdNum) as any;
     db.complete(null);
 
     res.json({
