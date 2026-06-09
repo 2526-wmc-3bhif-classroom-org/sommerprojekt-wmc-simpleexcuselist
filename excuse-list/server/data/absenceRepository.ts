@@ -14,6 +14,10 @@ export function syncAbsences(db: Unit, absences: any[], personId: number): any[]
     // excused (still open) so it surfaces to the student — matches
     // resolveAbsenceStatus in analyticsRepository.
     const isExcused = (a.isExcused === true || a.excuseStatus) ? 1 : 0;
+    if (isExcused) {
+      db.prepare(`DELETE FROM Absence WHERE untisId = ?`).run(a.id);
+      continue;
+    }
     stmt.run(
       crypto.randomUUID(),
       a.id,

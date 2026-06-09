@@ -123,7 +123,10 @@ const toggleSelect = (id: string) => {
 };
 
 // --- Drawer Logic ---
-const openDrawer = async (excuse: ParentExcuse) => {
+const drawerMode = ref<'grund' | 'anhang'>('grund');
+
+const openDrawer = async (excuse: ParentExcuse, mode: 'grund' | 'anhang') => {
+  drawerMode.value = mode;
   activeExcuse.value = excuse;
   showDrawer.value = true;
   loadingAttachments.value = true;
@@ -147,6 +150,20 @@ const closeDrawer = () => {
   showDrawer.value = false;
   activeExcuse.value = null;
   attachments.value = [];
+};
+
+// --- Zoom Modal Logic ---
+const activeZoomFile = ref<Attachment | null>(null);
+const showZoomModal = ref(false);
+
+const openZoom = (file: Attachment) => {
+  activeZoomFile.value = file;
+  showZoomModal.value = true;
+};
+
+const closeZoom = () => {
+  activeZoomFile.value = null;
+  showZoomModal.value = false;
 };
 
 // --- Signature Actions ---
@@ -334,15 +351,15 @@ const signSelectedExcuses = async () => {
 
             <!-- Reason & Buttons -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between sm:justify-end gap-3 border-t sm:border-0 border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-0">
-              <div class="text-xs text-slate-450 dark:text-slate-500 max-w-xs truncate italic mr-2">
-                {{ excuse.excuseMessage || 'Keine Begründung angegeben' }}
+              <div class="text-xs text-slate-500 dark:text-slate-400 italic mr-2 max-w-md break-words">
+                <span class="font-semibold text-slate-400 dark:text-slate-500 not-italic">Grund:</span> {{ excuse.excuseMessage || 'Keine Begründung angegeben' }}
               </div>
               <div class="flex items-center gap-2">
                 <button
-                  @click="openDrawer(excuse)"
+                  @click="openDrawer(excuse, 'anhang')"
                   class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
-                  Details
+                  Anhang
                 </button>
                 <button
                   @click="signSingle(excuse.absenceId)"
@@ -400,8 +417,37 @@ const signSelectedExcuses = async () => {
           </div>
         </div>
 
+        <!-- Mode Tabs -->
+        <div class="flex p-1 bg-slate-100 dark:bg-slate-950 border border-slate-205 dark:border-slate-850 rounded-xl shadow-inner transition-colors duration-300">
+          <button
+            @click="drawerMode = 'grund'"
+            :class="[
+              'flex-1 py-2 text-xs font-bold rounded-lg transition-all',
+              drawerMode === 'grund'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200 dark:border-slate-800'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            ]"
+          >
+            Grund
+          </button>
+          <button
+            @click="drawerMode = 'anhang'"
+            :class="[
+              'flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5',
+              drawerMode === 'anhang'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200 dark:border-slate-800'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            ]"
+          >
+            Anhang
+            <span v-if="attachments.length > 0" class="px-1.5 py-0.5 text-[9px] rounded-full bg-blue-600 text-white font-black leading-none">
+              {{ attachments.length }}
+            </span>
+          </button>
+        </div>
+
         <!-- Excuse Reason -->
-        <div>
+        <div v-if="drawerMode === 'grund'">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
             Begründung des Schülers
           </label>
@@ -411,7 +457,7 @@ const signSelectedExcuses = async () => {
         </div>
 
         <!-- Attachments Section -->
-        <div>
+        <div v-if="drawerMode === 'anhang'">
           <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
             Anhänge
           </label>
@@ -424,23 +470,55 @@ const signSelectedExcuses = async () => {
             Keine Anhänge vorhanden.
           </div>
 
-          <div v-else class="space-y-2">
+          <div v-else class="space-y-4">
             <div
               v-for="(file, i) in attachments"
               :key="i"
-              class="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl shadow-inner transition"
+              class="border border-slate-205 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-950 transition"
             >
-              <div class="flex items-center gap-2 truncate flex-1 pr-2">
-                <svg class="w-4 h-4 text-slate-450 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-                <span class="text-xs text-slate-700 dark:text-slate-350 truncate font-semibold">{{ file.fileName }}</span>
+              <!-- File Header -->
+              <div class="flex items-center justify-between px-3 py-2 bg-slate-100 dark:bg-slate-900 border-b border-slate-205 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-350">
+                <div class="flex items-center gap-2 truncate pr-2">
+                  <svg class="w-4 h-4 text-slate-450 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                  <span class="truncate font-bold">{{ file.fileName }}</span>
+                </div>
+                <a
+                  :href="file.fileData"
+                  :download="file.fileName"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-black px-2.5 py-1.5 rounded-lg text-[9px] uppercase tracking-wider transition inline-flex items-center cursor-pointer"
+                >
+                  Herunterladen
+                </a>
               </div>
-              <a
-                :href="file.fileData"
-                :download="file.fileName"
-                class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition inline-flex items-center cursor-pointer"
+              
+              <!-- File Preview (Clickable Preview) -->
+              <div 
+                @click="openZoom(file)" 
+                class="p-2 bg-white dark:bg-slate-900/50 cursor-zoom-in hover:bg-slate-50 dark:hover:bg-slate-800/60 transition group relative"
               >
-                Herunterladen
-              </a>
+                <div class="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/5 dark:group-hover:bg-white/5 transition flex items-center justify-center rounded-lg pointer-events-none z-10">
+                  <div class="opacity-0 group-hover:opacity-100 transition bg-slate-950/60 text-white text-[10px] font-black px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/></svg>
+                    Vergrößern
+                  </div>
+                </div>
+
+                <img
+                  v-if="file.fileData.startsWith('data:image')"
+                  :src="file.fileData"
+                  class="w-full h-auto mx-auto object-contain max-h-72 rounded-lg"
+                  alt="Anhang Vorschau"
+                />
+                <div v-else-if="file.fileData.startsWith('data:application/pdf')" class="relative">
+                  <iframe
+                    :src="file.fileData"
+                    class="w-full h-80 border-0 rounded-lg pointer-events-none"
+                  ></iframe>
+                </div>
+                <div v-else class="p-4 text-xs text-slate-400 dark:text-slate-500 text-center italic">
+                  Format wird nicht unterstützt. Bitte herunterladen.
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -463,6 +541,59 @@ const signSelectedExcuses = async () => {
         </button>
       </div>
 
+    </div>
+
+    <!-- Zoom Modal for Attachments -->
+    <div
+      v-if="showZoomModal && activeZoomFile"
+      class="fixed inset-0 z-60 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 transition-opacity duration-300"
+      @click="closeZoom"
+    >
+      <div 
+        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        @click.stop
+      >
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60">
+          <div class="flex items-center gap-2 truncate pr-4">
+            <svg class="w-5 h-5 text-slate-450 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+            <h4 class="font-black text-slate-950 dark:text-white truncate text-sm">{{ activeZoomFile.fileName }}</h4>
+          </div>
+          <div class="flex items-center gap-3">
+            <a
+              :href="activeZoomFile.fileData"
+              :download="activeZoomFile.fileName"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs uppercase tracking-wider transition inline-flex items-center cursor-pointer shadow-sm"
+            >
+              Herunterladen
+            </a>
+            <button 
+              @click="closeZoom" 
+              class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Content (Zoomed Preview) -->
+        <div class="flex-1 p-6 overflow-y-auto bg-slate-50 dark:bg-slate-950/40 flex items-center justify-center min-h-[50vh]">
+          <img
+            v-if="activeZoomFile.fileData.startsWith('data:image')"
+            :src="activeZoomFile.fileData"
+            class="max-w-full max-h-[70vh] object-contain rounded-xl shadow-md"
+            alt="Anhang vergrößert"
+          />
+          <iframe
+            v-else-if="activeZoomFile.fileData.startsWith('data:application/pdf')"
+            :src="activeZoomFile.fileData"
+            class="w-full h-[70vh] border-0 rounded-xl shadow-md"
+          ></iframe>
+          <div v-else class="text-slate-500 text-sm italic">
+            Format kann nicht vergrößert dargestellt werden. Bitte herunterladen.
+          </div>
+        </div>
+      </div>
     </div>
 
   </div>
