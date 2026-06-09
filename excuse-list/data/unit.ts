@@ -114,6 +114,36 @@ export class DB {
     // synced ClassScheduledLesson + ClassSyncState.
     connection.exec(`DROP TABLE IF EXISTS ScheduledLesson`);
     connection.exec(`DROP TABLE IF EXISTS ClassLessonTotal`);
+
+    // Migrate from shared ClassScheduledLesson to per-student StudentScheduledLesson
+    connection.exec(`
+      CREATE TABLE IF NOT EXISTS StudentScheduledLesson
+      (
+        id              TEXT PRIMARY KEY,
+        studentUntisId  INTEGER NOT NULL,
+        date            INTEGER NOT NULL,
+        startTime       INTEGER NOT NULL,
+        endTime         INTEGER NOT NULL,
+        subjectName     TEXT NOT NULL,
+        subjectLongName TEXT NOT NULL DEFAULT '',
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS StudentSyncState
+      (
+        studentUntisId INTEGER PRIMARY KEY,
+        lastSynced     INTEGER NOT NULL,
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_subject ON StudentScheduledLesson(studentUntisId, subjectName, date);
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_date ON StudentScheduledLesson(studentUntisId, date);
+
+      DROP TABLE IF EXISTS ClassScheduledLesson;
+      DROP TABLE IF EXISTS ClassSyncState;
+    `);
   }
 
   private static rebuildDatabase(connection: Database): void {
@@ -229,27 +259,31 @@ export class DB {
         FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
       );
 
-      CREATE TABLE IF NOT EXISTS ClassScheduledLesson
+      CREATE TABLE IF NOT EXISTS StudentScheduledLesson
       (
         id              TEXT PRIMARY KEY,
-        className       TEXT NOT NULL,
+        studentUntisId  INTEGER NOT NULL,
         date            INTEGER NOT NULL,
         startTime       INTEGER NOT NULL,
         endTime         INTEGER NOT NULL,
         subjectName     TEXT NOT NULL,
-        subjectLongName TEXT NOT NULL DEFAULT ''
+        subjectLongName TEXT NOT NULL DEFAULT '',
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
       );
 
-      CREATE TABLE IF NOT EXISTS ClassSyncState
+      CREATE TABLE IF NOT EXISTS StudentSyncState
       (
-        className  TEXT PRIMARY KEY,
-        lastSynced INTEGER NOT NULL
+        studentUntisId INTEGER PRIMARY KEY,
+        lastSynced     INTEGER NOT NULL,
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
       );
 
       CREATE INDEX IF NOT EXISTS idx_student_class ON Student(className);
       CREATE INDEX IF NOT EXISTS idx_absencelesson_student ON AbsenceLesson(studentUntisId);
-      CREATE INDEX IF NOT EXISTS idx_classscheduled_subject ON ClassScheduledLesson(className, subjectName, date);
-      CREATE INDEX IF NOT EXISTS idx_classscheduled_date ON ClassScheduledLesson(className, date);
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_subject ON StudentScheduledLesson(studentUntisId, subjectName, date);
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_date ON StudentScheduledLesson(studentUntisId, date);
       CREATE INDEX IF NOT EXISTS idx_absence_student ON Absence(studentUntisId);
       CREATE INDEX IF NOT EXISTS idx_absence_status ON Absence(status);
       CREATE INDEX IF NOT EXISTS idx_studentparent_parent ON StudentParent(parentId);

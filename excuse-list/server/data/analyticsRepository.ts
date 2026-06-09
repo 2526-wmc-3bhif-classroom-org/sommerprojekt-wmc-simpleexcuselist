@@ -75,33 +75,24 @@ function lessonOverlapsAbsence(lesson: any, abs: NormalizedAbsence): boolean {
   return lesson.startTime < abs.endTime && lesson.endTime > abs.startTime;
 }
 
-// ─── Sync: scheduled lessons (shared per class) ──────────────────────────────
+// ─── Sync: scheduled lessons (per student) ──────────────────────────────
 
-// The class timetable is the percentage denominator AND the source we match
-// absences against. It's shared across the class (spec Q12: all students of a
-// class share a timetable), so it only has to be backfilled once per class and
-// every later login just tops up the recent weeks (see syncClassScheduledLessons
-// + the background sync in authRouter).
-
-// Replaces the class timetable from windowStartInt onward with the freshly
-// fetched lessons, leaving older rows intact. Because every fetched lesson falls
-// inside that window, the delete-then-insert is idempotent: re-syncing an
-// overlapping range — or two students syncing at once — can't double-count, and
-// retroactively changed/cancelled lessons self-heal on the next overlapping sync.
-export function syncClassScheduledLessons(
+// Replaces the student timetable from windowStartInt onward with the freshly
+// fetched lessons, leaving older rows intact.
+export function syncStudentScheduledLessons(
   db: Unit,
-  className: string,
+  studentUntisId: number,
   lessons: any[],
   windowStartInt: number,
 ): number {
-  db.prepare(`DELETE FROM ClassScheduledLesson WHERE className = ? AND date >= ?`).run(
-    className,
+  db.prepare(`DELETE FROM StudentScheduledLesson WHERE studentUntisId = ? AND date >= ?`).run(
+    studentUntisId,
     windowStartInt,
   );
 
   const stmt = db.prepare(`
-    INSERT INTO ClassScheduledLesson
-      (id, className, date, startTime, endTime, subjectName, subjectLongName)
+    INSERT INTO StudentScheduledLesson
+      (id, studentUntisId, date, startTime, endTime, subjectName, subjectLongName)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
@@ -113,7 +104,7 @@ export function syncClassScheduledLessons(
     const su = l.su[0];
     stmt.run(
       crypto.randomUUID(),
-      className,
+      studentUntisId,
       l.date,
       l.startTime,
       l.endTime,
@@ -125,27 +116,27 @@ export function syncClassScheduledLessons(
   return count;
 }
 
-// Watermark: the last date (YYYYMMDD) up to which the class timetable is synced.
-export function getClassLastSynced(db: Unit, className: string): number | null {
+// Watermark: the last date (YYYYMMDD) up to which the student timetable is synced.
+export function getStudentLastSynced(db: Unit, studentUntisId: number): number | null {
   const row = db
-    .prepare(`SELECT lastSynced FROM ClassSyncState WHERE className = ?`)
-    .get(className) as any;
+    .prepare(`SELECT lastSynced FROM StudentSyncState WHERE studentUntisId = ?`)
+    .get(studentUntisId) as any;
   return row ? row.lastSynced : null;
 }
 
-export function setClassLastSynced(db: Unit, className: string, dateInt: number): void {
+export function setStudentLastSynced(db: Unit, studentUntisId: number, dateInt: number): void {
   db.prepare(`
-    INSERT INTO ClassSyncState (className, lastSynced)
+    INSERT INTO StudentSyncState (studentUntisId, lastSynced)
     VALUES (?, ?)
-    ON CONFLICT(className) DO UPDATE SET lastSynced = excluded.lastSynced
-  `).run(className, dateInt);
+    ON CONFLICT(studentUntisId) DO UPDATE SET lastSynced = excluded.lastSynced
+  `).run(studentUntisId, dateInt);
 }
 
 // ─── Sync: absence lessons (per student) ─────────────────────────────────────
 
-// Matches this student's absences against the shared class timetable already in
-// the DB (ClassScheduledLesson) — no per-student timetable fetch needed. Must run
-// after syncClassScheduledLessons so the table covers the absence dates.
+// Matches this student's absences against the student's own timetable already in
+// the DB (StudentScheduledLesson). Must run after syncStudentScheduledLessons so the
+// table covers the absence dates.
 export function syncAbsenceLessons(
   db: Unit,
   studentUntisId: number,
@@ -158,17 +149,17 @@ export function syncAbsenceLessons(
 
   if (normAbsences.length === 0) return 0;
 
-  // Pull only the class lessons on the (sparse) absence dates, then match by
+  // Pull only the student's lessons on the (sparse) absence dates, then match by
   // time overlap in JS.
   const dates = [...new Set(normAbsences.map((a) => a.date))];
   const placeholders = dates.map(() => '?').join(',');
-  const classLessons = db
+  const studentLessons = db
     .prepare(`
       SELECT date, startTime, endTime, subjectName, subjectLongName
-      FROM ClassScheduledLesson
-      WHERE className = ? AND date IN (${placeholders})
+      FROM StudentScheduledLesson
+      WHERE studentUntisId = ? AND date IN (${placeholders})
     `)
-    .all(className, ...dates) as any[];
+    .all(studentUntisId, ...dates) as any[];
 
   const stmt = db.prepare(`
     INSERT INTO AbsenceLesson
@@ -177,7 +168,7 @@ export function syncAbsenceLessons(
   `);
 
   let count = 0;
-  for (const l of classLessons) {
+  for (const l of studentLessons) {
     const abs = normAbsences.find((a) => {
       const timeOverlap = lessonOverlapsAbsence(l, a);
       if (!timeOverlap) return false;
@@ -271,9 +262,33 @@ function classOpenWindow(db: Unit, className: string): DateWindow | null {
 
 // ── Scheduled-lesson totals (the percentage denominator) ───────────────────────
 
-// How many lessons of each subject the class timetable holds (one shared copy),
-// optionally restricted to a date window. This is a single student's worth of
-// lessons — for the whole class, multiply by the student count.
+// How many lessons of each subject the student's timetable holds,
+// optionally restricted to a date window.
+function studentScheduledCounts(
+  db: Unit,
+  studentUntisId: number,
+  window: DateWindow | null,
+): Map<string, number> {
+  const rows = (
+    window
+      ? db
+          .prepare(
+            `SELECT subjectName, COUNT(*) AS c FROM StudentScheduledLesson
+             WHERE studentUntisId = ? AND date BETWEEN ? AND ? GROUP BY subjectName`,
+          )
+          .all(studentUntisId, window.min, window.max)
+      : db
+          .prepare(
+            `SELECT subjectName, COUNT(*) AS c FROM StudentScheduledLesson
+             WHERE studentUntisId = ? GROUP BY subjectName`,
+          )
+          .all(studentUntisId)
+  ) as any[];
+  return new Map(rows.map((r) => [r.subjectName, r.c]));
+}
+
+// How many lessons of each subject all students in the class hold,
+// optionally restricted to a date window.
 function classScheduledCounts(
   db: Unit,
   className: string,
@@ -283,14 +298,20 @@ function classScheduledCounts(
     window
       ? db
           .prepare(
-            `SELECT subjectName, COUNT(*) AS c FROM ClassScheduledLesson
-             WHERE className = ? AND date BETWEEN ? AND ? GROUP BY subjectName`,
+            `SELECT ssl.subjectName, COUNT(*) AS c 
+             FROM StudentScheduledLesson ssl
+             JOIN Student s ON ssl.studentUntisId = s.untisId
+             WHERE s.className = ? AND ssl.date BETWEEN ? AND ? 
+             GROUP BY ssl.subjectName`,
           )
           .all(className, window.min, window.max)
       : db
           .prepare(
-            `SELECT subjectName, COUNT(*) AS c FROM ClassScheduledLesson
-             WHERE className = ? GROUP BY subjectName`,
+            `SELECT ssl.subjectName, COUNT(*) AS c 
+             FROM StudentScheduledLesson ssl
+             JOIN Student s ON ssl.studentUntisId = s.untisId
+             WHERE s.className = ? 
+             GROUP BY ssl.subjectName`,
           )
           .all(className)
   ) as any[];
@@ -344,7 +365,7 @@ function studentSubjectStats(
     .all(studentUntisId) as MissedRow[];
 
   const window = mode === 'open' ? studentOpenWindow(db, studentUntisId) : null;
-  return buildSubjectStats(missed, classScheduledCounts(db, className, window));
+  return buildSubjectStats(missed, studentScheduledCounts(db, studentUntisId, window));
 }
 
 export function getSubjectAbsenceStats(
@@ -405,11 +426,11 @@ export function getClassAbsenceStats(
     `)
     .all(className) as MissedRow[];
 
-  // missed is summed across every student in the class, so the denominator —
-  // one student's worth of class lessons — is scaled up by the student count.
+  // missed is summed across every student in the class, and classScheduledCounts
+  // now returns the sum of all scheduled lessons for all students in the class,
+  // so no scaling is needed (factor is 1).
   const window = mode === 'open' ? classOpenWindow(db, className) : null;
-  const nStudents = countClassStudents(db, className);
-  const stats = buildSubjectStats(missed, classScheduledCounts(db, className, window), nStudents);
+  const stats = buildSubjectStats(missed, classScheduledCounts(db, className, window), 1);
   db.complete(null);
   return stats;
 }

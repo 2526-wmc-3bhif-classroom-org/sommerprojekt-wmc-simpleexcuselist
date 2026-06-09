@@ -13,9 +13,9 @@ import {
 } from '../data/untisService';
 import {
   syncAbsenceLessons,
-  syncClassScheduledLessons,
-  getClassLastSynced,
-  setClassLastSynced,
+  syncStudentScheduledLessons,
+  getStudentLastSynced,
+  setStudentLastSynced,
 } from '../data/analyticsRepository';
 import { upsertStudent } from '../data/studentRepository';
 import {
@@ -48,8 +48,8 @@ function dateToUntisInt(d: Date): number {
   return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 }
 
-// Keeps the shared class timetable fresh and rematches this student's absences
-// against it. The class timetable is backfilled once (first login of the class)
+// Keeps the student's timetable fresh and rematches this student's absences
+// against it. The timetable is backfilled once (first login of the student)
 // and every later login only tops up the last week — so a normal login costs
 // ~1–2 WebUntis calls, not a full-year fetch. Runs after the login response is
 // sent so it never adds latency to the (already slow) login.
@@ -63,12 +63,12 @@ async function syncStudentTimetableInBackground(
   try {
     const todayInt = dateToUntisInt(new Date());
 
-    // Resume from the class watermark (minus an overlap window); backfill the
-    // whole year only when the class has never been synced.
+    // Resume from the student watermark (minus an overlap window); backfill the
+    // whole year only when the student has never been synced.
     let lastSynced: number | null;
     {
       const rdb = new Unit(true);
-      lastSynced = getClassLastSynced(rdb, className);
+      lastSynced = getStudentLastSynced(rdb, personId);
       rdb.complete(null);
     }
 
@@ -85,8 +85,8 @@ async function syncStudentTimetableInBackground(
 
     const db = new Unit(false);
     try {
-      const scheduled = syncClassScheduledLessons(db, className, lessons, fetchStartInt);
-      setClassLastSynced(db, className, todayInt);
+      const scheduled = syncStudentScheduledLessons(db, personId, lessons, fetchStartInt);
+      setStudentLastSynced(db, personId, todayInt);
       const matched = syncAbsenceLessons(db, personId, className, untisAbsences);
       db.complete(true);
       console.log(
