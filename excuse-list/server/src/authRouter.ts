@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
 import { Unit } from '../../data/unit';
 import { jwtSecret } from '../middleware/auth';
+import { loginRateLimiter } from '../middleware/rateLimit';
 import {
   withUntis,
   fetchUserDetails,
@@ -102,7 +103,7 @@ async function syncStudentTimetableInBackground(
   }
 }
 
-router.post('/api/login', async (req, res) => {
+router.post('/api/login', loginRateLimiter, async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
