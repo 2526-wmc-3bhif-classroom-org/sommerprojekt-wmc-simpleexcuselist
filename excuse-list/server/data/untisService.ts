@@ -1,7 +1,8 @@
 import { WebUntis } from './untisClient';
+import { env } from '../config/env';
 
-const school = process.env.UNTIS_SCHOOL || 'htl-leonding';
-const untisHost = process.env.UNTIS_BASE_URL || 'htl-leonding.webuntis.com';
+const school = env.untisSchool;
+const untisHost = env.untisHost;
 
 export async function withUntis<T>(
   username: string,

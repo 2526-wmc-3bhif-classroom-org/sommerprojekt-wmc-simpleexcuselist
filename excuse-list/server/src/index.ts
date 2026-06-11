@@ -1,16 +1,16 @@
+// Must be first: loads .env and validates required vars before any router
+// module reads process.env.
+import { env } from '../config/env';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import authRouter from './authRouter';
 import studentRouter from './studentRouter';
 import parentRouter from './parentRouter';
 import teacherRouter from './teacherRouter';
 import attachmentRouter from './attachmentRouter';
 
-dotenv.config();
-
 const app = express();
-const port = process.env.PORT || 3000;
+const port = env.port;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
