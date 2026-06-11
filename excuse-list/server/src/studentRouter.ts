@@ -43,7 +43,20 @@ router.post('/api/excuses/submit', verifyJwt, requireStudent, async (req, res) =
         return res.status(400).json({ error: 'Diesem Schüler ist kein Elternteil zugewiesen' });
       }
 
-      updateAbsenceWithExcuse(db, absenceId, studentParent.parentId, message || null);
+      const changed = updateAbsenceWithExcuse(
+        db,
+        absenceId,
+        req.user!.untisId!,
+        studentParent.parentId,
+        message || null,
+      );
+
+      // Zero rows means the absence is not this student's (or doesn't exist).
+      // Reject instead of silently attaching files to it.
+      if (changed === 0) {
+        db.complete(false);
+        return res.status(404).json({ error: 'Fehlstunde nicht gefunden' });
+      }
 
       if (attachments && Array.isArray(attachments)) {
         insertAttachments(db, absenceId, attachments);

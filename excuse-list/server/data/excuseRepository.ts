@@ -1,17 +1,22 @@
 import crypto from 'node:crypto';
 import { Unit } from '../../data/unit';
 
+// Scoped by studentUntisId so a student can only excuse their OWN absences.
+// Returns the number of rows changed (0 means the absence does not exist or
+// does not belong to this student).
 export function updateAbsenceWithExcuse(
   db: Unit,
   absenceId: string,
+  studentUntisId: number,
   parentId: string,
   message: string | null,
-) {
-  db.prepare(`
+): number {
+  const result = db.prepare(`
     UPDATE Absence
     SET excuseParentId = ?, excuseMessage = ?, status = 'pending', updatedAt = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(parentId, message, absenceId);
+    WHERE id = ? AND studentUntisId = ?
+  `).run(parentId, message, absenceId, studentUntisId);
+  return result.changes;
 }
 
 export function insertAttachments(db: Unit, absenceId: string, attachments: any[]) {
@@ -60,4 +65,31 @@ export function getAttachmentsByAbsence(absenceId: string) {
   const attachments = db.prepare(`SELECT fileName, fileData FROM Attachment WHERE absenceId = ?`).all(absenceId);
   db.complete(null);
   return attachments;
+}
+
+// True if the absence belongs to one of this parent's children (via
+// StudentParent). Used to gate access to attachments (medical certificates).
+export function absenceBelongsToParent(absenceId: string, parentId: string): boolean {
+  const db = new Unit(true);
+  const row = db.prepare(`
+    SELECT 1
+    FROM Absence a
+    JOIN StudentParent sp ON sp.studentUntisId = a.studentUntisId
+    WHERE a.id = ? AND sp.parentId = ?
+  `).get(absenceId, parentId);
+  db.complete(null);
+  return !!row;
+}
+
+// True if the absence belongs to a student in this teacher's class.
+export function absenceInTeacherClass(absenceId: string, className: string): boolean {
+  const db = new Unit(true);
+  const row = db.prepare(`
+    SELECT 1
+    FROM Absence a
+    JOIN Student s ON s.untisId = a.studentUntisId
+    WHERE a.id = ? AND s.className = ?
+  `).get(absenceId, className);
+  db.complete(null);
+  return !!row;
 }
