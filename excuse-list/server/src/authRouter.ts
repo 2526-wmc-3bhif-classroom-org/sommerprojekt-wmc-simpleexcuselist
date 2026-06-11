@@ -144,6 +144,7 @@ router.post('/api/login', async (req, res) => {
 
     const result = await withUntis(username, password, async (untis) => {
       const session = untis.sessionInformation;
+      if (!session) throw new Error('WebUntis login did not return a session');
       const personId = session.personId;
       const personType = session.personType;
 

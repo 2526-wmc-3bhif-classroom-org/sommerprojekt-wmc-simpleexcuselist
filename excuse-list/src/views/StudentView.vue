@@ -96,6 +96,11 @@ const logout = () => {
   router.push('/');
 };
 
+// Absences not yet excused in WebUntis — the ones still needing action.
+const openAbsenceCount = computed(
+  () => absences.value.filter((a) => !a.isExcusedUntis).length,
+);
+
 // --- Filtered Absences ---
 const filteredAbsences = computed(() => {
   if (!searchFilter.value) return absences.value;
@@ -284,7 +289,7 @@ const percentageClass = (p: number | null) => {
           </h2>
           <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
             <template v-if="!showAnalytics">
-              Du hast aktuell <span class="font-bold text-primary">{{ absences.length }}</span> offene Fehlstunde{{ absences.length === 1 ? '' : 'n' }}.
+              Du hast aktuell <span class="font-bold text-primary">{{ openAbsenceCount }}</span> offene Fehlstunde{{ openAbsenceCount === 1 ? '' : 'n' }}.
             </template>
             <template v-else>
               Stundenplan- und Fachstatistiken deiner Abwesenheiten.
@@ -446,10 +451,20 @@ const percentageClass = (p: number | null) => {
 
             <!-- Status & Button -->
             <div class="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-0 border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-0">
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-650 border border-orange-200/50 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-900/40">
+              <span
+                v-if="absence.isExcusedUntis"
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40"
+              >
+                Entschuldigt
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-650 border border-orange-200/50 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-900/40"
+              >
                 Unentschuldigt
               </span>
               <button
+                v-if="!absence.isExcusedUntis"
                 @click="openModal(absence)"
                 class="bg-slate-950 hover:bg-slate-850 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >

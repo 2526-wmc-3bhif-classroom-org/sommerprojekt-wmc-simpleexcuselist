@@ -1,4 +1,4 @@
-import { WebUntis } from 'webuntis';
+import { WebUntis } from './untisClient';
 
 const school = process.env.UNTIS_SCHOOL || 'htl-leonding';
 const untisHost = process.env.UNTIS_BASE_URL || 'htl-leonding.webuntis.com';
