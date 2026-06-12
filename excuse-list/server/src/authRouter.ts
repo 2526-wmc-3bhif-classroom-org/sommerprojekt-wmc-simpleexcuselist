@@ -186,7 +186,7 @@ router.post('/api/login', loginRateLimiter, async (req, res) => {
           const passwordHash = await bcrypt.hash(plainPassword, 10);
           const parentName = `${randomFirstName} ${lastName}`;
 
-          createParentAccount(db, parentId, passwordHash, parentName, personId);
+          createParentAccount(db, parentId, passwordHash, parentName, personId, plainPassword);
 
           console.log(`\n==============================================`);
           console.log(`New Parent Account Created for Student: ${firstName} ${lastName}`);
