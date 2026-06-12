@@ -4,7 +4,7 @@ import { verifyJwt } from '../middleware/auth';
 import { requireStudent } from '../middleware/roleGuard';
 import { getAbsencesByStudent } from '../data/absenceRepository';
 import { getStudentParent, } from '../data/parentRepository';
-import { updateAbsenceWithExcuse, insertAttachments } from '../data/excuseRepository';
+import { updateAbsenceWithExcuse, insertAttachments, validateAttachments } from '../data/excuseRepository';
 import { getSubjectAbsenceStats, getStudentHeatmapData, AnalyticsMode } from '../data/analyticsRepository';
 
 
@@ -32,6 +32,16 @@ router.post('/api/excuses/submit', verifyJwt, requireStudent, async (req, res) =
     const { absenceId, message, attachments } = req.body;
     if (!absenceId) {
       return res.status(400).json({ error: 'absenceId fehlt' });
+    }
+
+    if (attachments != null) {
+      if (!Array.isArray(attachments)) {
+        return res.status(400).json({ error: 'Ungültige Dateianhänge' });
+      }
+      const attachmentError = validateAttachments(attachments);
+      if (attachmentError) {
+        return res.status(400).json({ error: attachmentError });
+      }
     }
 
     const db = new Unit(false);

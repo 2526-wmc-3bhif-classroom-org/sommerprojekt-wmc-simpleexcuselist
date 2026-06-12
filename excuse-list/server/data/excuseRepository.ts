@@ -1,6 +1,55 @@
 import crypto from 'node:crypto';
 import { Unit } from '../../data/unit';
 
+// Upload limits for excuse attachments (medical certificates). Attachments
+// arrive as data URLs (data:<mime>;base64,<data>) in the JSON body.
+export const MAX_ATTACHMENTS = 3;
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5 MB per file
+const ALLOWED_ATTACHMENT_MIME = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+]);
+
+// Validates an attachments array against the count/size/type limits. Returns a
+// German error message if invalid, or null if everything is acceptable. This is
+// the authoritative check — the client does the same for UX but can be bypassed.
+export function validateAttachments(attachments: unknown[]): string | null {
+  if (attachments.length > MAX_ATTACHMENTS) {
+    return `Maximal ${MAX_ATTACHMENTS} Dateien erlaubt.`;
+  }
+
+  for (const att of attachments as any[]) {
+    if (!att || typeof att.fileName !== 'string' || typeof att.fileData !== 'string') {
+      return 'Ungültiger Dateianhang.';
+    }
+
+    // Parse the data URL header: "data:<mime>;base64,<data>".
+    const commaIndex = att.fileData.indexOf(',');
+    const header = commaIndex === -1 ? '' : att.fileData.slice(0, commaIndex);
+    const base64 = commaIndex === -1 ? '' : att.fileData.slice(commaIndex + 1);
+    if (!header.startsWith('data:') || !/;base64$/i.test(header)) {
+      return 'Dateianhang muss base64-kodiert sein.';
+    }
+
+    const mime = header.slice('data:'.length).split(';')[0].toLowerCase();
+    if (!ALLOWED_ATTACHMENT_MIME.has(mime)) {
+      return 'Nur PDF, JPEG und PNG sind erlaubt.';
+    }
+
+    // Decoded byte length is the real file size (base64 inflates by ~33%).
+    const sizeBytes = Buffer.from(base64, 'base64').length;
+    if (sizeBytes === 0) {
+      return 'Leerer Dateianhang.';
+    }
+    if (sizeBytes > MAX_ATTACHMENT_BYTES) {
+      return 'Jede Datei darf höchstens 5 MB groß sein.';
+    }
+  }
+
+  return null;
+}
+
 // Scoped by studentUntisId so a student can only excuse their OWN absences.
 // Returns the number of rows changed (0 means the absence does not exist or
 // does not belong to this student).

@@ -127,14 +127,38 @@ const closeModal = () => {
   activeAbsence.value = null;
 };
 
+// Mirrors the server-side limits in validateAttachments (excuseRepository.ts).
+const MAX_FILES = 3;
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+
+const addFiles = (files: File[]) => {
+  for (const f of files) {
+    if (!ALLOWED_FILE_TYPES.includes(f.type)) {
+      alert(`„${f.name}" wird nicht unterstützt. Nur PDF, JPEG und PNG sind erlaubt.`);
+      continue;
+    }
+    if (f.size > MAX_FILE_BYTES) {
+      alert(`„${f.name}" ist größer als 5 MB.`);
+      continue;
+    }
+    if (excuseFiles.value.length >= MAX_FILES) {
+      alert(`Maximal ${MAX_FILES} Dateien erlaubt.`);
+      break;
+    }
+    excuseFiles.value.push(f);
+  }
+};
+
 const onFileChange = (e: Event) => {
   const input = e.target as HTMLInputElement;
-  if (input.files) excuseFiles.value.push(...Array.from(input.files));
+  if (input.files) addFiles(Array.from(input.files));
+  input.value = ''; // allow re-selecting the same file after removal
 };
 
 const onDrop = (e: DragEvent) => {
   e.preventDefault();
-  if (e.dataTransfer?.files) excuseFiles.value.push(...Array.from(e.dataTransfer.files));
+  if (e.dataTransfer?.files) addFiles(Array.from(e.dataTransfer.files));
 };
 
 const removeFile = (index: number) => {
