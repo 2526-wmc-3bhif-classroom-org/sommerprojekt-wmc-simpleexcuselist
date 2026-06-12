@@ -12,7 +12,7 @@ router.get('/api/parent/excuses', verifyJwt, requireParent, async (req, res) => 
     res.json(absences);
   } catch (error: any) {
     console.error('Error fetching parent excuses:', error.message);
-    res.status(500).json({ error: 'Error fetching parent excuses', details: error.message });
+    res.status(500).json({ error: 'Error fetching parent excuses' });
   }
 });
 

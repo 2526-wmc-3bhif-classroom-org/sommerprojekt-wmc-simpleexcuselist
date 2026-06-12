@@ -31,7 +31,7 @@ router.get('/api/absences/:absenceId/attachments', verifyJwt, requireTeacherOrPa
     res.json(attachments);
   } catch (error: any) {
     console.error('Error fetching attachments:', error.message);
-    res.status(500).json({ error: 'Error fetching attachments', details: error.message });
+    res.status(500).json({ error: 'Error fetching attachments' });
   }
 });
 

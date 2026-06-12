@@ -23,7 +23,7 @@ router.get('/api/absences', verifyJwt, async (req, res) => {
     res.json(unexcused);
   } catch (error: any) {
     console.error('Error fetching absences:', error.message);
-    res.status(500).json({ error: 'Error fetching absences', details: error.message });
+    res.status(500).json({ error: 'Error fetching absences' });
   }
 });
 
@@ -102,7 +102,7 @@ router.get('/api/student/analytics', verifyJwt, requireStudent, async (req, res)
     res.json({ stats, heatmap });
   } catch (error: any) {
     console.error('Error fetching student analytics:', error.message);
-    res.status(500).json({ error: 'Fehler beim Laden der Analyse', details: error.message });
+    res.status(500).json({ error: 'Fehler beim Laden der Analyse' });
   }
 });
 
