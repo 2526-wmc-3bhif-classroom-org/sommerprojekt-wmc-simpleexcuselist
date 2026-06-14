@@ -21,7 +21,7 @@ router.get('/api/teacher/students', verifyJwt, requireTeacher, async (req, res) 
     res.json(students);
   } catch (error: any) {
     console.error('Error fetching teacher students:', error.message);
-    res.status(500).json({ error: 'Error fetching students', details: error.message });
+    res.status(500).json({ error: 'Error fetching students' });
   }
 });
 
@@ -47,7 +47,7 @@ router.get('/api/teacher/students/:studentId/absences', verifyJwt, requireTeache
     });
   } catch (error: any) {
     console.error('Error fetching student absences:', error.message);
-    res.status(500).json({ error: 'Error fetching absences', details: error.message });
+    res.status(500).json({ error: 'Error fetching absences' });
   }
 });
 
@@ -66,7 +66,7 @@ router.get('/api/teacher/students/:studentId/analytics', verifyJwt, requireTeach
     res.json({ stats, heatmap });
   } catch (error: any) {
     console.error('Error fetching student analytics:', error.message);
-    res.status(500).json({ error: 'Error fetching analytics', details: error.message });
+    res.status(500).json({ error: 'Error fetching analytics' });
   }
 });
 
@@ -81,7 +81,7 @@ router.get('/api/teacher/class/analytics', verifyJwt, requireTeacher, async (req
     res.json({ stats, heatmap, studentTable });
   } catch (error: any) {
     console.error('Error fetching class analytics:', error.message);
-    res.status(500).json({ error: 'Error fetching class analytics', details: error.message });
+    res.status(500).json({ error: 'Error fetching class analytics' });
   }
 });
 

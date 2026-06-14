@@ -43,11 +43,12 @@ export function createParentAccount(
   passwordHash: string,
   parentName: string,
   studentUntisId: number,
+  plainPassword: string,
 ) {
   db.prepare(`
-    INSERT INTO Parent (id, username, passwordHash, name)
-    VALUES (?, ?, ?, ?)
-  `).run(parentId, parentId, passwordHash, parentName);
+    INSERT INTO Parent (id, username, passwordHash, name, plainPassword)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(parentId, parentId, passwordHash, parentName, plainPassword);
 
   db.prepare(`
     INSERT INTO StudentParent (parentId, studentUntisId)

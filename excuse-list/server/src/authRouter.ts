@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
 import { Unit } from '../../data/unit';
 import { jwtSecret } from '../middleware/auth';
+import { loginRateLimiter } from '../middleware/rateLimit';
 import {
   withUntis,
   fetchUserDetails,
@@ -102,7 +103,7 @@ async function syncStudentTimetableInBackground(
   }
 }
 
-router.post('/api/login', async (req, res) => {
+router.post('/api/login', loginRateLimiter, async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -144,6 +145,7 @@ router.post('/api/login', async (req, res) => {
 
     const result = await withUntis(username, password, async (untis) => {
       const session = untis.sessionInformation;
+      if (!session) throw new Error('WebUntis login did not return a session');
       const personId = session.personId;
       const personType = session.personType;
 
@@ -184,7 +186,7 @@ router.post('/api/login', async (req, res) => {
           const passwordHash = await bcrypt.hash(plainPassword, 10);
           const parentName = `${randomFirstName} ${lastName}`;
 
-          createParentAccount(db, parentId, passwordHash, parentName, personId);
+          createParentAccount(db, parentId, passwordHash, parentName, personId, plainPassword);
 
           console.log(`\n==============================================`);
           console.log(`New Parent Account Created for Student: ${firstName} ${lastName}`);

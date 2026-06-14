@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import type { JwtPayload } from '../../model/types';
+import { env } from '../config/env';
 
 declare global {
   namespace Express {
@@ -10,7 +11,7 @@ declare global {
   }
 }
 
-export const jwtSecret = process.env.JWT_SECRET || 'super-secret-key-1234';
+export const jwtSecret = env.jwtSecret;
 
 export function verifyJwt(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;

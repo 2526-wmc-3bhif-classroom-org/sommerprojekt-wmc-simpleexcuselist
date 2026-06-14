@@ -109,6 +109,11 @@ export class DB {
       connection.exec(`CREATE INDEX IF NOT EXISTS idx_absencelesson_status ON AbsenceLesson(absenceStatus)`);
     }
 
+    const parentColumns = DB.getTableColumns(connection, "Parent");
+    if (!parentColumns.includes("plainPassword")) {
+      connection.exec(`ALTER TABLE Parent ADD COLUMN plainPassword TEXT`);
+    }
+
     // Drop superseded analytics tables: the per-student ScheduledLesson and the
     // aggregate ClassLessonTotal were replaced by the shared, incrementally
     // synced ClassScheduledLesson + ClassSyncState.
@@ -179,11 +184,14 @@ export class DB {
 
       CREATE TABLE IF NOT EXISTS Parent
       (
-        id           TEXT PRIMARY KEY,
-        username     TEXT NOT NULL UNIQUE,
-        passwordHash TEXT NOT NULL,
-        name         TEXT NOT NULL,
-        createdAt    TEXT DEFAULT CURRENT_TIMESTAMP
+        id            TEXT PRIMARY KEY,
+        username      TEXT NOT NULL UNIQUE,
+        passwordHash  TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        -- DEV: plaintext of the generated password, kept for easy lookup so
+        -- testers can log into the auto-created parent account.
+        plainPassword TEXT,
+        createdAt     TEXT DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS StudentParent
