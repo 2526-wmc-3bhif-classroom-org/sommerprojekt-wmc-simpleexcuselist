@@ -223,9 +223,17 @@ export interface HeatmapCell {
   subjects?: string[];
 }
 
-interface DateWindow {
+export interface DateWindow {
   min: number;
   max: number;
+}
+
+// Optional user-supplied date window (YYYYMMDD) applied to AbsenceLesson rows.
+// Returns the SQL fragment + bound params, or empty values when no range is set.
+function dateRangeClause(range: DateWindow | null, col = 'al.date'): { sql: string; params: number[] } {
+  return range
+    ? { sql: ` AND ${col} BETWEEN ? AND ?`, params: [range.min, range.max] }
+    : { sql: '', params: [] };
 }
 
 interface MissedRow {
@@ -352,19 +360,21 @@ function studentSubjectStats(
   studentUntisId: number,
   className: string,
   mode: AnalyticsMode,
+  range: DateWindow | null = null,
 ): SubjectStat[] {
+  const dr = dateRangeClause(range);
   const missed = db
     .prepare(
       `SELECT al.subjectName,
               MAX(al.subjectLongName) AS subjectLongName,
               COUNT(*) AS missedLessons
        FROM AbsenceLesson al
-       WHERE al.studentUntisId = ? ${statusFilter(mode)}
+       WHERE al.studentUntisId = ? ${statusFilter(mode)}${dr.sql}
        GROUP BY al.subjectName`,
     )
-    .all(studentUntisId) as MissedRow[];
+    .all(studentUntisId, ...dr.params) as MissedRow[];
 
-  const window = mode === 'open' ? studentOpenWindow(db, studentUntisId) : null;
+  const window = range ?? (mode === 'open' ? studentOpenWindow(db, studentUntisId) : null);
   return buildSubjectStats(missed, studentScheduledCounts(db, studentUntisId, window));
 }
 
@@ -372,6 +382,7 @@ export function getSubjectAbsenceStats(
   studentUntisId: number,
   className: string,
   mode: AnalyticsMode = 'open',
+  range: DateWindow | null = null,
 ): SubjectStat[] | null {
   const db = new Unit(true);
 
@@ -384,7 +395,7 @@ export function getSubjectAbsenceStats(
     return null;
   }
 
-  const stats = studentSubjectStats(db, studentUntisId, className, mode);
+  const stats = studentSubjectStats(db, studentUntisId, className, mode, range);
   db.complete(null);
   return stats;
 }
@@ -393,16 +404,18 @@ export function getStudentHeatmapData(
   studentUntisId: number,
   className: string,
   mode: AnalyticsMode = 'open',
+  range: DateWindow | null = null,
 ): HeatmapCell[] {
   const db = new Unit(true);
 
+  const dr = dateRangeClause(range);
   const rows = db
     .prepare(`
       SELECT al.date, al.startTime, al.endTime, al.subjectName
       FROM AbsenceLesson al
-      WHERE al.studentUntisId = ? ${statusFilter(mode)}
+      WHERE al.studentUntisId = ? ${statusFilter(mode)}${dr.sql}
     `)
-    .all(studentUntisId) as any[];
+    .all(studentUntisId, ...dr.params) as any[];
 
   db.complete(null);
   return buildHeatmap(rows);
@@ -411,9 +424,11 @@ export function getStudentHeatmapData(
 export function getClassAbsenceStats(
   className: string,
   mode: AnalyticsMode = 'open',
+  range: DateWindow | null = null,
 ): SubjectStat[] {
   const db = new Unit(true);
 
+  const dr = dateRangeClause(range);
   const missed = db
     .prepare(`
       SELECT al.subjectName,
@@ -421,15 +436,15 @@ export function getClassAbsenceStats(
              COUNT(*) AS missedLessons
       FROM AbsenceLesson al
       JOIN Student s ON al.studentUntisId = s.untisId
-      WHERE s.className = ? ${statusFilter(mode)}
+      WHERE s.className = ? ${statusFilter(mode)}${dr.sql}
       GROUP BY al.subjectName
     `)
-    .all(className) as MissedRow[];
+    .all(className, ...dr.params) as MissedRow[];
 
   // missed is summed across every student in the class, and classScheduledCounts
   // now returns the sum of all scheduled lessons for all students in the class,
   // so no scaling is needed (factor is 1).
-  const window = mode === 'open' ? classOpenWindow(db, className) : null;
+  const window = range ?? (mode === 'open' ? classOpenWindow(db, className) : null);
   const stats = buildSubjectStats(missed, classScheduledCounts(db, className, window), 1);
   db.complete(null);
   return stats;
@@ -438,17 +453,19 @@ export function getClassAbsenceStats(
 export function getClassHeatmapData(
   className: string,
   mode: AnalyticsMode = 'open',
+  range: DateWindow | null = null,
 ): HeatmapCell[] {
   const db = new Unit(true);
 
+  const dr = dateRangeClause(range);
   const rows = db
     .prepare(`
       SELECT al.date, al.startTime, al.endTime, al.subjectName
       FROM AbsenceLesson al
       JOIN Student s ON al.studentUntisId = s.untisId
-      WHERE s.className = ? ${statusFilter(mode)}
+      WHERE s.className = ? ${statusFilter(mode)}${dr.sql}
     `)
-    .all(className) as any[];
+    .all(className, ...dr.params) as any[];
 
   db.complete(null);
   return buildHeatmap(rows);
@@ -464,6 +481,7 @@ export interface StudentTopSubjects {
 export function getClassStudentTable(
   className: string,
   mode: AnalyticsMode = 'open',
+  range: DateWindow | null = null,
 ): StudentTopSubjects[] {
   const db = new Unit(true);
 
@@ -476,7 +494,7 @@ export function getClassStudentTable(
     firstName: s.firstName,
     lastName: s.lastName,
     // Each student's own open window, so percentages match the single-student view.
-    top3: studentSubjectStats(db, s.untisId, className, mode).slice(0, 3),
+    top3: studentSubjectStats(db, s.untisId, className, mode, range).slice(0, 3),
   }));
 
   db.complete(null);
