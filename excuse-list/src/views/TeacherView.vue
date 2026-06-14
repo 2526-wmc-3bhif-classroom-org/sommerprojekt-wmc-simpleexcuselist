@@ -80,11 +80,16 @@ const showAnalytics = ref(false)
 const analyticsMode = ref<'open' | 'all'>('open')
 const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [] })
 const loadingAnalytics = ref(false)
+// Date-range filter (YYYY-MM-DD from native date inputs); empty = unbounded.
+const analyticsFrom = ref('')
+const analyticsTo = ref('')
 
 // Class analytics — always over all absences (no open/all toggle).
 const showClassAnalytics = ref(false)
 const classAnalytics = ref<ClassAnalyticsPayload>({ stats: [], heatmap: [], studentTable: [] })
 const loadingClassAnalytics = ref(false)
+const classFrom = ref('')
+const classTo = ref('')
 
 // Attachments modal
 const showAttachmentModal = ref(false)
@@ -119,6 +124,15 @@ const formatDate = (dateNum: number) => {
 const formatTime = (timeNum: number) => {
   const s = timeNum.toString().padStart(4, '0')
   return `${s.substring(0, 2)}:${s.substring(2, 4)}`
+}
+
+// Builds the &from=&to= query fragment for the analytics endpoints (omits empties).
+const rangeQuery = (from: string, to: string) => {
+  const p = new URLSearchParams()
+  if (from) p.set('from', from)
+  if (to) p.set('to', to)
+  const s = p.toString()
+  return s ? `&${s}` : ''
 }
 
 const severityClass = (n: number) => {
@@ -185,6 +199,8 @@ const selectStudent = async (student: Student) => {
   selectedStudent.value = student
   absences.value = []
   analytics.value = { stats: [], heatmap: [] }
+  analyticsFrom.value = ''
+  analyticsTo.value = ''
   showAnalytics.value = false
   showClassAnalytics.value = false
   const token = getToken()
@@ -213,7 +229,7 @@ const fetchAnalytics = async () => {
   loadingAnalytics.value = true
   try {
     const res = await fetch(
-      `/api/teacher/students/${selectedStudent.value.untisId}/analytics?mode=${analyticsMode.value}`,
+      `/api/teacher/students/${selectedStudent.value.untisId}/analytics?mode=${analyticsMode.value}${rangeQuery(analyticsFrom.value, analyticsTo.value)}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
     if (!res.ok) throw new Error(`Fehler (${res.status})`)
@@ -230,7 +246,7 @@ const fetchClassAnalytics = async () => {
   if (!token) return
   loadingClassAnalytics.value = true
   try {
-    const res = await fetch(`/api/teacher/class/analytics?mode=all`, {
+    const res = await fetch(`/api/teacher/class/analytics?mode=all${rangeQuery(classFrom.value, classTo.value)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) throw new Error(`Fehler (${res.status})`)
@@ -255,6 +271,18 @@ const setAnalyticsMode = (mode: 'open' | 'all') => {
 const toggleClassAnalytics = () => {
   showClassAnalytics.value = true
   selectedStudent.value = null
+  fetchClassAnalytics()
+}
+
+const clearAnalyticsRange = () => {
+  analyticsFrom.value = ''
+  analyticsTo.value = ''
+  fetchAnalytics()
+}
+
+const clearClassRange = () => {
+  classFrom.value = ''
+  classTo.value = ''
   fetchClassAnalytics()
 }
 
@@ -405,6 +433,20 @@ onMounted(fetchStudents)
           </div>
 
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+            <!-- Zeitraum filter (applies to the whole analysis below) -->
+            <div class="px-6 py-3 bg-white border-b border-gray-200 flex items-center gap-3 flex-wrap text-sm flex-shrink-0">
+              <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
+              <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
+                <input type="date" v-model="classFrom" :max="classTo || undefined" @change="fetchClassAnalytics"
+                  class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+              <span class="text-gray-400">–</span>
+              <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
+                <input type="date" v-model="classTo" :min="classFrom || undefined" @change="fetchClassAnalytics"
+                  class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+              <button v-if="classFrom || classTo" @click="clearClassRange"
+                class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
+            </div>
+
             <div v-if="loadingClassAnalytics" class="p-12 flex-grow flex items-center justify-center">
               <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
             </div>
@@ -530,6 +572,20 @@ onMounted(fetchStudents)
                     {{ unexcusedHours }} EH
                   </span>
                 </div>
+              </div>
+
+              <!-- Zeitraum filter (applies to the whole analysis below) -->
+              <div class="px-6 py-3 bg-white border-b border-gray-200 flex items-center gap-3 flex-wrap text-sm flex-shrink-0">
+                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
+                <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
+                  <input type="date" v-model="analyticsFrom" :max="analyticsTo || undefined" @change="fetchAnalytics"
+                    class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+                <span class="text-gray-400">–</span>
+                <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
+                  <input type="date" v-model="analyticsTo" :min="analyticsFrom || undefined" @change="fetchAnalytics"
+                    class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+                <button v-if="analyticsFrom || analyticsTo" @click="clearAnalyticsRange"
+                  class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
               </div>
 
               <div v-if="loadingAnalytics" class="p-12 flex-grow flex items-center justify-center bg-white">
