@@ -48,13 +48,6 @@ export async function seedMockTeacher() {
       VALUES (?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), 'prof3bhif', passwordHash, 'Prof. Maier', '3BHIF');
     writeDb.complete(true);
-
-    console.log('\n==============================================');
-    console.log('Mock Teacher Account Created');
-    console.log('Username: prof3bhif');
-    console.log('Password: lehrer1234');
-    console.log('Class:    3BHIF');
-    console.log('==============================================\n');
   } catch (err) {
     writeDb.complete(false);
     console.error('Failed to seed mock teacher:', err);
@@ -75,11 +68,5 @@ export async function createTeacherForClass(db: Unit, className: string) {
     INSERT INTO Teacher (id, username, passwordHash, name, className)
     VALUES (?, ?, ?, ?, ?)
   `).run(id, username, passwordHash, name, className);
-
-  console.log(`\n==============================================`);
-  console.log(`New Teacher Account Created for Class: ${className}`);
-  console.log(`Username: ${username}`);
-  console.log(`Password: lehrer1234`);
-  console.log(`==============================================\n`);
 }
 
