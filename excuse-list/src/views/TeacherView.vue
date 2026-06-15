@@ -526,13 +526,6 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
                   class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
               <button v-if="classFrom || classTo" @click="clearClassRange"
                 class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
-              <!-- Class-wide total (all statuses, unfiltered) -->
-              <div class="ml-auto flex items-center gap-2 flex-shrink-0">
-                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Fehlstunden gesamt:</span>
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-bold text-sm bg-gray-100 text-gray-700 border border-gray-200">
-                  {{ classTotalHours }} EH
-                </span>
-              </div>
             </div>
 
             <div v-if="loadingClassAnalytics" class="p-12 flex-grow flex items-center justify-center">
