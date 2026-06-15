@@ -260,6 +260,8 @@ const fetchStudents = async () => {
 const selectStudent = async (student: Student) => {
   selectedStudent.value = student
   absences.value = []
+  totalHours.value = 0
+  unexcusedHours.value = 0
   analytics.value = { stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0 }
   analyticsFrom.value = ''
   analyticsTo.value = ''

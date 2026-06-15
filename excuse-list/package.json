@@ -16,7 +16,7 @@
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache",
     "format": "prettier --write --experimental-cli src/",
-    "server": "tsx server/src/index.ts"
+    "server": "tsx watch server/src/index.ts"
   },
   "dependencies": {
     "apexcharts": "^5.13.0",

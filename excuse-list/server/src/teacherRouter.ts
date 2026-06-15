@@ -56,11 +56,11 @@ router.get('/api/teacher/students/:studentId/absences', verifyJwt, requireTeache
     }
 
     const db = new Unit(true);
-    // Absence table is always populated on student login (excused-in-WebUntis rows
-    // are deleted; every other row remains). AbsenceLesson requires a background
-    // timetable sync and may be empty — so we count from Absence here.
-    const totalRow    = db.prepare(`SELECT COUNT(*) AS count FROM Absence WHERE studentUntisId = ?`).get(studentIdNum) as any;
-    const unexcusedRow = db.prepare(`SELECT COUNT(*) AS count FROM Absence WHERE studentUntisId = ? AND status = 'open'`).get(studentIdNum) as any;
+    // AbsenceLesson holds one row per missed lesson (excused + unexcused), giving
+    // the true total. Absence only stores currently-open absence periods and would
+    // miss all previously-excused absences.
+    const totalRow    = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?`).get(studentIdNum) as any;
+    const unexcusedRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')`).get(studentIdNum) as any;
     db.complete(null);
 
     res.json({
