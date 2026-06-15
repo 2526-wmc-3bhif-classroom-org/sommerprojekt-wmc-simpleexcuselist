@@ -7,6 +7,7 @@ import { getStudentsByClass, getStudentSignedAbsences, getClassBehaviorSummary }
 import {
   getSubjectAbsenceStats,
   getStudentHeatmapData,
+  getStudentAbsenceSummary,
   getClassAbsenceStats,
   getClassHeatmapData,
   getClassStudentTable,
@@ -83,7 +84,8 @@ router.get('/api/teacher/students/:studentId/analytics', verifyJwt, requireTeach
     }
 
     const heatmap = getStudentHeatmapData(studentId, className, mode, range);
-    res.json({ stats, heatmap });
+    const summary = getStudentAbsenceSummary(studentId, className, range);
+    res.json({ stats, heatmap, totalHours: summary?.totalHours ?? 0, unexcusedHours: summary?.unexcusedHours ?? 0 });
   } catch (error: any) {
     console.error('Error fetching student analytics:', error.message);
     res.status(500).json({ error: 'Error fetching analytics' });

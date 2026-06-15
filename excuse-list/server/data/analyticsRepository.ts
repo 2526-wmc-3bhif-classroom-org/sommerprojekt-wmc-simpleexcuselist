@@ -378,6 +378,28 @@ function studentSubjectStats(
   return buildSubjectStats(missed, studentScheduledCounts(db, studentUntisId, window));
 }
 
+export function getStudentAbsenceSummary(
+  studentUntisId: number,
+  className: string,
+  range: DateWindow | null = null,
+): { totalHours: number; unexcusedHours: number } | null {
+  const db = new Unit(true);
+  const student = db.prepare(`SELECT untisId FROM Student WHERE untisId = ? AND className = ?`)
+    .get(studentUntisId, className) as any;
+  if (!student) { db.complete(null); return null; }
+
+  const dr = dateRangeClause(range);
+  const totalRow = db.prepare(
+    `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?${dr.sql}`,
+  ).get(studentUntisId, ...dr.params) as any;
+  const unexcusedRow = db.prepare(
+    `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')${dr.sql}`,
+  ).get(studentUntisId, ...dr.params) as any;
+
+  db.complete(null);
+  return { totalHours: totalRow?.count ?? 0, unexcusedHours: unexcusedRow?.count ?? 0 };
+}
+
 export function getSubjectAbsenceStats(
   studentUntisId: number,
   className: string,

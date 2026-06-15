@@ -61,6 +61,8 @@ interface BehaviorEntry {
 interface AnalyticsPayload {
   stats: SubjectStat[]
   heatmap: HeatmapCell[]
+  totalHours: number
+  unexcusedHours: number
 }
 
 interface ClassAnalyticsPayload {
@@ -87,7 +89,7 @@ const unexcusedHours = ref(0)
 // Student analytics
 const showAnalytics = ref(false)
 const analyticsMode = ref<'open' | 'all'>('open')
-const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [] })
+const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0 })
 const loadingAnalytics = ref(false)
 // Date-range filter (YYYY-MM-DD from native date inputs); empty = unbounded.
 const analyticsFrom = ref('')
@@ -258,7 +260,7 @@ const fetchStudents = async () => {
 const selectStudent = async (student: Student) => {
   selectedStudent.value = student
   absences.value = []
-  analytics.value = { stats: [], heatmap: [] }
+  analytics.value = { stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0 }
   analyticsFrom.value = ''
   analyticsTo.value = ''
   showAnalytics.value = false
@@ -649,35 +651,34 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
             <!-- Analytics -->
             <div v-if="showAnalytics" class="flex-1 flex flex-col min-h-0">
-              <!-- Summary Bar (Total Hours + Behavior Grade) -->
+              <!-- Summary Bar (Total Hours + Behavior Grade) — all values respect the active date filter -->
               <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm flex-wrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Gesamte Fehlstunden:</span>
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-primary/10 text-primary border border-primary/20">
-                    {{ totalHours }} EH
+                    {{ analytics.totalHours }} EH
                   </span>
                 </div>
                 <div class="h-4 w-px bg-gray-200"></div>
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Davon unentschuldigt:</span>
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
-                    {{ unexcusedHours }} EH
+                    {{ analytics.unexcusedHours }} EH
                   </span>
                 </div>
                 <div class="h-4 w-px bg-gray-200"></div>
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Verhaltensnote:</span>
                   <span
-                    v-if="selectedStudent && behaviorMap.has(selectedStudent.untisId)"
                     :class="['inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-semibold border text-xs',
-                      behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).bgClass,
-                      behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).textClass,
-                      behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).borderClass]"
+                      behaviorGrade(analytics.unexcusedHours).bgClass,
+                      behaviorGrade(analytics.unexcusedHours).textClass,
+                      behaviorGrade(analytics.unexcusedHours).borderClass]"
                   >
                     <span class="w-2 h-2 rounded-full flex-shrink-0"
-                      :style="{ background: behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).color }"
+                      :style="{ background: behaviorGrade(analytics.unexcusedHours).color }"
                     ></span>
-                    {{ behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).label }}
+                    {{ behaviorGrade(analytics.unexcusedHours).label }}
                   </span>
                 </div>
               </div>
