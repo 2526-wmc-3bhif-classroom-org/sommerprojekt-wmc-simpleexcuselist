@@ -56,12 +56,15 @@ export async function seedMockTeacher() {
 
 export function getClassBehaviorSummary(className: string) {
   const db = new Unit(true);
+  // Count from Absence table (populated on student login, always reliable).
+  // Excused-in-WebUntis rows are deleted from Absence on sync, so every row
+  // here is still outstanding. status='open' = no excuse submitted at all.
   const rows = db.prepare(`
     SELECT s.untisId, s.firstName, s.lastName,
-           COUNT(al.id) AS totalHours,
-           COUNT(CASE WHEN al.absenceStatus IN ('open', 'pending') THEN 1 END) AS unexcusedHours
+           COUNT(a.id)                                        AS totalHours,
+           COUNT(CASE WHEN a.status = 'open' THEN 1 END)     AS unexcusedHours
     FROM Student s
-    LEFT JOIN AbsenceLesson al ON al.studentUntisId = s.untisId
+    LEFT JOIN Absence a ON a.studentUntisId = s.untisId
     WHERE s.className = ?
     GROUP BY s.untisId, s.firstName, s.lastName
     ORDER BY s.lastName ASC, s.firstName ASC
