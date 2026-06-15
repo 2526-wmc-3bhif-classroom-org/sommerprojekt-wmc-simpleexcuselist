@@ -22,6 +22,7 @@ interface Absence {
   endTime: number
   status: string
   excuseMessage?: string
+  attachmentCount: number
 }
 
 interface Attachment {
@@ -55,7 +56,7 @@ interface BehaviorEntry {
   firstName: string
   lastName: string
   totalHours: number
-  unexcusedHours: number
+  notExcusedHours: number
 }
 
 interface AnalyticsPayload {
@@ -63,6 +64,7 @@ interface AnalyticsPayload {
   heatmap: HeatmapCell[]
   totalHours: number
   unexcusedHours: number
+  notExcusedHours: number
 }
 
 interface ClassAnalyticsPayload {
@@ -84,12 +86,13 @@ const teacherName = ref('')
 const teacherClass = ref('')
 const totalHours = ref(0)
 const unexcusedHours = ref(0)
+const notExcusedHours = ref(0)
 
 
 // Student analytics
 const showAnalytics = ref(false)
 const analyticsMode = ref<'open' | 'all'>('open')
-const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0 })
+const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0, notExcusedHours: 0 })
 const loadingAnalytics = ref(false)
 // Date-range filter (YYYY-MM-DD from native date inputs); empty = unbounded.
 const analyticsFrom = ref('')
@@ -104,6 +107,9 @@ const classTo = ref('')
 
 // Behavior summary (all students, all absences regardless of status)
 const behaviorSummary = ref<BehaviorEntry[]>([])
+
+// List tab
+const listTab = ref<'signed' | 'open' | 'pending'>('signed')
 
 // Attachments modal
 const showAttachmentModal = ref(false)
@@ -194,13 +200,13 @@ const behaviorMap = computed(() => {
 
 // Sorted by unexcused hours descending — that's what drives the grade
 const sortedBehavior = computed(() =>
-  [...behaviorSummary.value].sort((a, b) => b.unexcusedHours - a.unexcusedHours),
+  [...behaviorSummary.value].sort((a, b) => b.notExcusedHours - a.notExcusedHours),
 )
 
 const behaviorTierCounts = computed(() =>
   BEHAVIOR_TIERS.map((t) => ({
     ...t,
-    count: behaviorSummary.value.filter((e) => e.unexcusedHours >= t.min && e.unexcusedHours <= t.max).length,
+    count: behaviorSummary.value.filter((e) => e.notExcusedHours >= t.min && e.notExcusedHours <= t.max).length,
     grade: behaviorGrade(t.min),
   })),
 )
@@ -257,33 +263,48 @@ const fetchStudents = async () => {
   }
 }
 
-const selectStudent = async (student: Student) => {
-  selectedStudent.value = student
-  absences.value = []
-  totalHours.value = 0
-  unexcusedHours.value = 0
-  analytics.value = { stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0 }
-  analyticsFrom.value = ''
-  analyticsTo.value = ''
-  showAnalytics.value = false
-  showClassAnalytics.value = false
+const fetchStudentAbsences = async () => {
+  if (!selectedStudent.value) return
   const token = getToken()
   if (!token) return
   loadingAbsences.value = true
   try {
-    const res = await fetch(`/api/teacher/students/${student.untisId}/absences`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const rq = rangeQuery(analyticsFrom.value, analyticsTo.value)
+    const res = await fetch(
+      `/api/teacher/students/${selectedStudent.value.untisId}/absences${rq ? rq.replace(/^&/, '?') : ''}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
     if (!res.ok) throw new Error(`Fehler (${res.status})`)
     const data = await res.json()
     absences.value = data.absences
     totalHours.value = data.totalHours
     unexcusedHours.value = data.unexcusedHours
+    notExcusedHours.value = data.notExcusedHours ?? 0
   } catch (err: any) {
     error.value = err.message || 'Fehler beim Laden der Absenzen'
   } finally {
     loadingAbsences.value = false
   }
+}
+
+const onRangeChange = () => {
+  fetchStudentAbsences()
+  if (showAnalytics.value) fetchAnalytics()
+}
+
+const selectStudent = async (student: Student) => {
+  selectedStudent.value = student
+  absences.value = []
+  totalHours.value = 0
+  unexcusedHours.value = 0
+  notExcusedHours.value = 0
+  analytics.value = { stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0, notExcusedHours: 0 }
+  analyticsFrom.value = ''
+  analyticsTo.value = ''
+  showAnalytics.value = false
+  showClassAnalytics.value = false
+  listTab.value = 'signed'
+  await fetchStudentAbsences()
 }
 
 const fetchAnalytics = async () => {
@@ -341,7 +362,7 @@ const toggleClassAnalytics = () => {
 const clearAnalyticsRange = () => {
   analyticsFrom.value = ''
   analyticsTo.value = ''
-  fetchAnalytics()
+  onRangeChange()
 }
 
 const clearClassRange = () => {
@@ -380,7 +401,14 @@ const logout = () => {
   router.push('/')
 }
 
-const activeAbsences = computed(() => absences.value.filter((a) => a.status === 'signed'))
+const signedAbsences = computed(() => absences.value.filter((a) => a.status === 'signed'))
+const openAbsences = computed(() => absences.value.filter((a) => a.status === 'open'))
+const pendingAbsences = computed(() => absences.value.filter((a) => a.status === 'pending'))
+const activeAbsences = computed(() => {
+  if (listTab.value === 'open') return openAbsences.value
+  if (listTab.value === 'pending') return pendingAbsences.value
+  return signedAbsences.value
+})
 
 const fetchBehaviorSummary = async () => {
   const token = getToken()
@@ -451,12 +479,12 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
               <div v-if="behaviorMap.has(student.untisId)" class="flex items-center gap-1 ml-2 flex-shrink-0">
                 <span
                   class="text-[11px] font-bold tabular-nums"
-                  :style="{ color: behaviorGrade(behaviorMap.get(student.untisId)!.unexcusedHours).color }"
-                  :title="`${behaviorGrade(behaviorMap.get(student.untisId)!.unexcusedHours).label} · ${behaviorMap.get(student.untisId)!.unexcusedHours} unentschuldigte EH`"
-                >{{ behaviorMap.get(student.untisId)!.unexcusedHours }}</span>
+                  :style="{ color: behaviorGrade(behaviorMap.get(student.untisId)!.notExcusedHours).color }"
+                  :title="`${behaviorGrade(behaviorMap.get(student.untisId)!.notExcusedHours).label} · ${behaviorMap.get(student.untisId)!.notExcusedHours} nicht entschuldigte EH`"
+                >{{ behaviorMap.get(student.untisId)!.notExcusedHours }}</span>
                 <span
                   class="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  :style="{ background: behaviorGrade(behaviorMap.get(student.untisId)!.unexcusedHours).color }"
+                  :style="{ background: behaviorGrade(behaviorMap.get(student.untisId)!.notExcusedHours).color }"
                 ></span>
               </div>
               <svg class="h-4 w-4 text-gray-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="selectedStudent?.untisId === student.untisId">
@@ -633,7 +661,7 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
           <!-- Toolbar -->
           <div class="flex items-center justify-between mb-6 flex-shrink-0 flex-wrap gap-3">
             <h2 class="text-2xl font-bold text-gray-900">
-              {{ showAnalytics ? 'Analyse' : 'Unterschriebene Entschuldigungen' }}
+              {{ showAnalytics ? 'Analyse' : listTab === 'open' ? 'Offene Fehlstunden' : listTab === 'pending' ? 'Abgeschickte Entschuldigungen' : 'Unterschriebene Entschuldigungen' }}
             </h2>
             <div class="flex items-center gap-3 flex-wrap">
               <!-- Open/All toggle (analytics only) -->
@@ -649,22 +677,18 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
             </div>
           </div>
 
-          <!-- Stat cards: all-time totals for the selected student -->
-          <div class="flex items-center gap-4 mb-6 flex-shrink-0 flex-wrap">
-            <div class="flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-5 py-3 shadow-sm">
-              <div class="flex flex-col">
-                <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Fehlstunden gesamt</span>
-                <span class="text-3xl font-black text-gray-900 tabular-nums leading-tight">{{ totalHours }}</span>
-              </div>
-              <span class="text-sm text-gray-400 font-semibold self-end pb-0.5">EH</span>
-            </div>
-            <div class="flex items-center gap-3 bg-white border border-red-200 rounded-lg px-5 py-3 shadow-sm">
-              <div class="flex flex-col">
-                <span class="text-[11px] font-semibold text-red-400 uppercase tracking-wider">Nicht entschuldigt</span>
-                <span class="text-3xl font-black text-red-600 tabular-nums leading-tight">{{ unexcusedHours }}</span>
-              </div>
-              <span class="text-sm text-red-400 font-semibold self-end pb-0.5">EH</span>
-            </div>
+          <!-- Shared date-range filter — applies to both Liste stats and Analyse -->
+          <div class="flex items-center gap-3 flex-wrap text-sm mb-2">
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
+            <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
+              <input type="date" v-model="analyticsFrom" :max="analyticsTo || undefined" @change="onRangeChange"
+                class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+            <span class="text-gray-400">–</span>
+            <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
+              <input type="date" v-model="analyticsTo" :min="analyticsFrom || undefined" @change="onRangeChange"
+                class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+            <button v-if="analyticsFrom || analyticsTo" @click="clearAnalyticsRange"
+              class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
           </div>
 
           <!-- Content card -->
@@ -681,9 +705,16 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
                 </div>
                 <div class="h-4 w-px bg-gray-200"></div>
                 <div class="flex items-center gap-2">
-                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Davon unentschuldigt:</span>
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Offene Fehlstunden:</span>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
                     {{ analytics.unexcusedHours }} EH
+                  </span>
+                </div>
+                <div class="h-4 w-px bg-gray-200"></div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Nicht entschuldigt:</span>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                    {{ analytics.notExcusedHours }} EH
                   </span>
                 </div>
                 <div class="h-4 w-px bg-gray-200"></div>
@@ -691,30 +722,16 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
                   <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Verhaltensnote:</span>
                   <span
                     :class="['inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-semibold border text-xs',
-                      behaviorGrade(analytics.unexcusedHours).bgClass,
-                      behaviorGrade(analytics.unexcusedHours).textClass,
-                      behaviorGrade(analytics.unexcusedHours).borderClass]"
+                      behaviorGrade(analytics.notExcusedHours).bgClass,
+                      behaviorGrade(analytics.notExcusedHours).textClass,
+                      behaviorGrade(analytics.notExcusedHours).borderClass]"
                   >
                     <span class="w-2 h-2 rounded-full flex-shrink-0"
-                      :style="{ background: behaviorGrade(analytics.unexcusedHours).color }"
+                      :style="{ background: behaviorGrade(analytics.notExcusedHours).color }"
                     ></span>
-                    {{ behaviorGrade(analytics.unexcusedHours).label }}
+                    {{ behaviorGrade(analytics.notExcusedHours).label }}
                   </span>
                 </div>
-              </div>
-
-              <!-- Zeitraum filter (applies to the whole analysis below) -->
-              <div class="px-6 py-3 bg-white border-b border-gray-200 flex items-center gap-3 flex-wrap text-sm flex-shrink-0">
-                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
-                <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
-                  <input type="date" v-model="analyticsFrom" :max="analyticsTo || undefined" @change="fetchAnalytics"
-                    class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
-                <span class="text-gray-400">–</span>
-                <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
-                  <input type="date" v-model="analyticsTo" :min="analyticsFrom || undefined" @change="fetchAnalytics"
-                    class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
-                <button v-if="analyticsFrom || analyticsTo" @click="clearAnalyticsRange"
-                  class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
               </div>
 
               <div v-if="loadingAnalytics" class="p-12 flex-grow flex items-center justify-center bg-white">
@@ -768,12 +785,40 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
 
             <!-- List -->
             <div v-else class="flex-1 flex flex-col min-h-0 bg-slate-50">
+              <!-- List Tab Bar -->
+              <div class="px-6 py-2 bg-white border-b border-gray-200 flex items-center gap-1 flex-shrink-0">
+                <button
+                  @click="listTab = 'signed'"
+                  :class="['flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-colors',
+                    listTab === 'signed' ? 'bg-green-50 text-green-700 border border-green-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50']"
+                >
+                  Unterschrieben
+                  <span :class="['text-xs font-bold px-1.5 py-0.5 rounded-full', listTab === 'signed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500']">{{ signedAbsences.length }}</span>
+                </button>
+                <button
+                  @click="listTab = 'open'"
+                  :class="['flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-colors',
+                    listTab === 'open' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50']"
+                >
+                  Offen
+                  <span :class="['text-xs font-bold px-1.5 py-0.5 rounded-full', listTab === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500']">{{ openAbsences.length }}</span>
+                </button>
+                <button
+                  @click="listTab = 'pending'"
+                  :class="['flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-colors',
+                    listTab === 'pending' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50']"
+                >
+                  Abgeschickt
+                  <span :class="['text-xs font-bold px-1.5 py-0.5 rounded-full', listTab === 'pending' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500']">{{ pendingAbsences.length }}</span>
+                </button>
+              </div>
+
               <div v-if="loadingAbsences" class="p-12 flex-grow flex items-center justify-center bg-white">
                 <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
               </div>
               <div v-else class="flex-grow flex flex-col min-h-0">
                 <!-- Summary Bar (Total Hours) -->
-                <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm">
+                <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm flex-wrap">
                   <div class="flex items-center gap-2">
                     <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Gesamte Fehlstunden:</span>
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-primary/10 text-primary border border-primary/20">
@@ -782,9 +827,16 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
                   </div>
                   <div class="h-4 w-px bg-gray-200"></div>
                   <div class="flex items-center gap-2">
-                    <span class="text-xs font-semibold text-gray-550 uppercase tracking-wider">Davon unentschuldigt:</span>
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Offene Fehlstunden:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
                       {{ unexcusedHours }} EH
+                    </span>
+                  </div>
+                  <div class="h-4 w-px bg-gray-200"></div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Nicht entschuldigt:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                      {{ notExcusedHours }} EH
                     </span>
                   </div>
                 </div>
@@ -793,15 +845,21 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
                   <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
                     <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                   </div>
-                  <p class="text-gray-500 text-sm font-medium">Alle Absenzen wurden bearbeitet.</p>
+                  <p class="text-gray-500 text-sm font-medium">
+                    {{ listTab === 'open' ? 'Keine offenen Fehlstunden.' : listTab === 'pending' ? 'Keine abgeschickten Entschuldigungen.' : 'Alle Absenzen wurden bearbeitet.' }}
+                  </p>
                 </div>
                 <div v-else class="flex-grow overflow-y-auto min-h-0 bg-white">
-                  <table class="w-full text-sm text-left border-collapse">
+
+                  <!-- Signed absences -->
+                  <!-- Signed absences -->
+                  <table v-if="listTab === 'signed'" class="w-full text-sm text-left border-collapse">
                     <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
                       <tr>
                         <th class="px-6 py-3 font-semibold">Datum</th>
                         <th class="px-6 py-3 font-semibold">Von</th>
                         <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold text-center">Anhang</th>
                         <th class="px-6 py-3 font-semibold text-center">Status</th>
                         <th class="px-6 py-3 font-semibold text-right">Aktion</th>
                       </tr>
@@ -812,6 +870,13 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
                         <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
                         <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
                         <td class="px-6 py-4 text-center">
+                          <span v-if="absence.attachmentCount > 0" class="inline-flex items-center gap-1 text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded" :title="`${absence.attachmentCount} Anhang/Anhänge`">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                            {{ absence.attachmentCount }}
+                          </span>
+                          <span v-else class="text-gray-300 text-xs">—</span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
                           <span class="inline-flex items-center gap-1.5 text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-semibold border border-green-200">Unterschrieben</span>
                         </td>
                         <td class="px-6 py-4 text-right">
@@ -820,6 +885,65 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
                       </tr>
                     </tbody>
                   </table>
+
+                  <!-- Open absences (no excuse submitted) -->
+                  <table v-else-if="listTab === 'open'" class="w-full text-sm text-left border-collapse">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold">Datum</th>
+                        <th class="px-6 py-3 font-semibold">Von</th>
+                        <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-center">
+                          <span class="inline-flex items-center gap-1.5 text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs font-semibold border border-yellow-200">Keine Entschuldigung</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <!-- Pending absences (excuse submitted by student, awaiting parent signature) -->
+                  <table v-else class="w-full text-sm text-left border-collapse">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold">Datum</th>
+                        <th class="px-6 py-3 font-semibold">Von</th>
+                        <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold">Begründung</th>
+                        <th class="px-6 py-3 font-semibold text-center">Anhang</th>
+                        <th class="px-6 py-3 font-semibold text-center">Status</th>
+                        <th class="px-6 py-3 font-semibold text-right">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600 max-w-xs truncate">{{ absence.excuseMessage || '—' }}</td>
+                        <td class="px-6 py-4 text-center">
+                          <span v-if="absence.attachmentCount > 0" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded" :title="`${absence.attachmentCount} Anhang/Anhänge`">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                            {{ absence.attachmentCount }}
+                          </span>
+                          <span v-else class="text-gray-300 text-xs">—</span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                          <span class="inline-flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs font-semibold border border-blue-200">Wartet auf Unterschrift</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                          <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">Ansehen</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
                 </div>
               </div>
             </div>

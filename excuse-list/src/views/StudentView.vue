@@ -495,10 +495,28 @@ const percentageClass = (p: number | null) => {
                 Entschuldigt
               </span>
               <span
-                v-else
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-650 border border-orange-200/50 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-900/40"
+                v-else-if="absence.status === 'unexcused'"
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200/50 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/40"
               >
-                Unentschuldigt
+                Nicht entschuldigt
+              </span>
+              <span
+                v-else-if="absence.status === 'pending'"
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200/50 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/40"
+              >
+                Abgeschickt
+              </span>
+              <span
+                v-else-if="absence.status === 'signed'"
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-600 border border-violet-200/50 dark:bg-violet-950/20 dark:text-violet-400 dark:border-violet-900/40"
+              >
+                Unterschrieben
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200/50 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-900/40"
+              >
+                Offen
               </span>
               <button
                 v-if="!absence.isExcusedUntis"

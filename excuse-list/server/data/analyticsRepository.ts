@@ -52,9 +52,11 @@ interface NormalizedAbsence {
   subject?: string;
 }
 
-// Maps WebUntis absence fields to a status string for AbsenceLesson
+// Maps WebUntis absence fields to a status string for AbsenceLesson.
+// 'unexcused' = teacher explicitly marked "nicht entschuldigt" (excuseStatus set, not excused).
 function resolveAbsenceStatus(a: any): string {
-  if (a.isExcused === true || a.excuseStatus) return 'excused';
+  if (a.isExcused === true) return 'excused';
+  if (a.excuseStatus) return 'unexcused';
   return 'open';
 }
 
@@ -204,7 +206,7 @@ export type AnalyticsMode = 'open' | 'all';
 // means "everything still open in WebUntis", matching the spec (Q1).
 function statusFilter(mode: AnalyticsMode): string {
   return mode === 'open'
-    ? `AND al.absenceStatus IN ('open', 'pending')`
+    ? `AND al.absenceStatus IN ('open', 'pending', 'unexcused')`
     : '';
 }
 
@@ -251,7 +253,7 @@ function studentOpenWindow(db: Unit, studentUntisId: number): DateWindow | null 
   const row = db
     .prepare(
       `SELECT MIN(date) AS min, MAX(date) AS max FROM AbsenceLesson
-       WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')`,
+       WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending', 'unexcused')`,
     )
     .get(studentUntisId) as any;
   return row && row.min != null ? { min: row.min, max: row.max } : null;
@@ -262,7 +264,7 @@ function classOpenWindow(db: Unit, className: string): DateWindow | null {
     .prepare(
       `SELECT MIN(al.date) AS min, MAX(al.date) AS max FROM AbsenceLesson al
        JOIN Student s ON al.studentUntisId = s.untisId
-       WHERE s.className = ? AND al.absenceStatus IN ('open', 'pending')`,
+       WHERE s.className = ? AND al.absenceStatus IN ('open', 'pending', 'unexcused')`,
     )
     .get(className) as any;
   return row && row.min != null ? { min: row.min, max: row.max } : null;
@@ -382,7 +384,7 @@ export function getStudentAbsenceSummary(
   studentUntisId: number,
   className: string,
   range: DateWindow | null = null,
-): { totalHours: number; unexcusedHours: number } | null {
+): { totalHours: number; unexcusedHours: number; notExcusedHours: number } | null {
   const db = new Unit(true);
   const student = db.prepare(`SELECT untisId FROM Student WHERE untisId = ? AND className = ?`)
     .get(studentUntisId, className) as any;
@@ -395,9 +397,16 @@ export function getStudentAbsenceSummary(
   const unexcusedRow = db.prepare(
     `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')${dr.sql}`,
   ).get(studentUntisId, ...dr.params) as any;
+  const notExcusedRow = db.prepare(
+    `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus = 'unexcused'${dr.sql}`,
+  ).get(studentUntisId, ...dr.params) as any;
 
   db.complete(null);
-  return { totalHours: totalRow?.count ?? 0, unexcusedHours: unexcusedRow?.count ?? 0 };
+  return {
+    totalHours: totalRow?.count ?? 0,
+    unexcusedHours: unexcusedRow?.count ?? 0,
+    notExcusedHours: notExcusedRow?.count ?? 0,
+  };
 }
 
 export function getSubjectAbsenceStats(

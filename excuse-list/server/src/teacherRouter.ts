@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { Unit } from '../../data/unit';
 import { verifyJwt } from '../middleware/auth';
 import { requireTeacher } from '../middleware/roleGuard';
-import { getStudentsByClass, getStudentSignedAbsences, getClassBehaviorSummary } from '../data/teacherRepository';
+import { getStudentsByClass, getStudentAllAbsences, getClassBehaviorSummary } from '../data/teacherRepository';
 
 import {
   getSubjectAbsenceStats,
@@ -49,24 +49,29 @@ router.get('/api/teacher/students/:studentId/absences', verifyJwt, requireTeache
   try {
     const { studentId } = req.params;
     const studentIdNum = Number(studentId);
-    const absences = getStudentSignedAbsences(studentId, req.user!.className!);
+    const range = buildRange(req.query.from, req.query.to);
+    const absences = getStudentAllAbsences(studentId, req.user!.className!, range);
 
     if (absences === null) {
       return res.status(404).json({ error: 'Student not found in your class' });
     }
 
     const db = new Unit(true);
+    const drSql = range ? ' AND date BETWEEN ? AND ?' : '';
+    const drParams = range ? [range.min, range.max] : [];
     // AbsenceLesson holds one row per missed lesson (excused + unexcused), giving
     // the true total. Absence only stores currently-open absence periods and would
     // miss all previously-excused absences.
-    const totalRow    = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?`).get(studentIdNum) as any;
-    const unexcusedRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')`).get(studentIdNum) as any;
+    const totalRow      = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?${drSql}`).get(studentIdNum, ...drParams) as any;
+    const unexcusedRow  = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')${drSql}`).get(studentIdNum, ...drParams) as any;
+    const notExcusedRow = db.prepare(`SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus = 'unexcused'${drSql}`).get(studentIdNum, ...drParams) as any;
     db.complete(null);
 
     res.json({
       absences,
       totalHours: totalRow?.count ?? 0,
-      unexcusedHours: unexcusedRow?.count ?? 0
+      unexcusedHours: unexcusedRow?.count ?? 0,
+      notExcusedHours: notExcusedRow?.count ?? 0,
     });
   } catch (error: any) {
     console.error('Error fetching student absences:', error.message);
@@ -88,7 +93,13 @@ router.get('/api/teacher/students/:studentId/analytics', verifyJwt, requireTeach
 
     const heatmap = getStudentHeatmapData(studentId, className, mode, range);
     const summary = getStudentAbsenceSummary(studentId, className, range);
-    res.json({ stats, heatmap, totalHours: summary?.totalHours ?? 0, unexcusedHours: summary?.unexcusedHours ?? 0 });
+    res.json({
+      stats,
+      heatmap,
+      totalHours: summary?.totalHours ?? 0,
+      unexcusedHours: summary?.unexcusedHours ?? 0,
+      notExcusedHours: summary?.notExcusedHours ?? 0,
+    });
   } catch (error: any) {
     console.error('Error fetching student analytics:', error.message);
     res.status(500).json({ error: 'Error fetching analytics' });

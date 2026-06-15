@@ -31,6 +31,32 @@ export function getStudentSignedAbsences(studentId: string, className: string) {
   return absences;
 }
 
+export function getStudentAllAbsences(
+  studentId: string,
+  className: string,
+  range?: { min: number; max: number } | null,
+) {
+  const db = new Unit(true);
+  const student = db.prepare(`SELECT untisId FROM Student WHERE untisId = ? AND className = ?`).get(studentId, className) as any;
+  if (!student) {
+    db.complete(null);
+    return null;
+  }
+  const dateClause = range ? ` AND a.date BETWEEN ? AND ?` : '';
+  const dateParams = range ? [range.min, range.max] : [];
+  const absences = db.prepare(`
+    SELECT a.id, a.date, a.startTime, a.endTime, a.status, a.excuseMessage,
+           COUNT(att.id) AS attachmentCount
+    FROM Absence a
+    LEFT JOIN Attachment att ON att.absenceId = a.id
+    WHERE a.studentUntisId = ? AND a.isExcusedUntis = 0${dateClause}
+    GROUP BY a.id
+    ORDER BY a.date DESC
+  `).all(studentId, ...dateParams);
+  db.complete(null);
+  return absences;
+}
+
 export async function seedMockTeacher() {
   const db = new Unit(true);
   const existing = db.prepare(`SELECT id FROM Teacher WHERE username = ?`).get('prof3bhif') as any;
@@ -61,10 +87,11 @@ export function getClassBehaviorSummary(className: string) {
   // here is still outstanding. status='open' = no excuse submitted at all.
   const rows = db.prepare(`
     SELECT s.untisId, s.firstName, s.lastName,
-           COUNT(a.id)                                        AS totalHours,
-           COUNT(CASE WHEN a.status = 'open' THEN 1 END)     AS unexcusedHours
+           COUNT(DISTINCT a.id)                                               AS totalHours,
+           COUNT(DISTINCT CASE WHEN al.absenceStatus = 'unexcused' THEN al.id END) AS notExcusedHours
     FROM Student s
-    LEFT JOIN Absence a ON a.studentUntisId = s.untisId
+    LEFT JOIN Absence a  ON a.studentUntisId  = s.untisId
+    LEFT JOIN AbsenceLesson al ON al.studentUntisId = s.untisId AND al.absenceStatus = 'unexcused'
     WHERE s.className = ?
     GROUP BY s.untisId, s.firstName, s.lastName
     ORDER BY s.lastName ASC, s.firstName ASC

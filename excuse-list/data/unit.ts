@@ -114,6 +114,14 @@ export class DB {
       connection.exec(`ALTER TABLE Parent ADD COLUMN plainPassword TEXT`);
     }
 
+    const absenceColumns = DB.getTableColumns(connection, "Absence");
+    if (!absenceColumns.includes("excuseParentId")) {
+      connection.exec(`ALTER TABLE Absence ADD COLUMN excuseParentId TEXT`);
+    }
+    if (!absenceColumns.includes("excuseMessage")) {
+      connection.exec(`ALTER TABLE Absence ADD COLUMN excuseMessage TEXT`);
+    }
+
     // Drop superseded analytics tables: the per-student ScheduledLesson and the
     // aggregate ClassLessonTotal were replaced by the shared, incrementally
     // synced ClassScheduledLesson + ClassSyncState.
