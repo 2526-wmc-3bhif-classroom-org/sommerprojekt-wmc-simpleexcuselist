@@ -39,6 +39,8 @@ interface Absence {
 }
 
 const absences = ref<Absence[]>([]);
+const totalCount = ref(0);
+const unexcusedCount = ref(0);
 const loading = ref(true);
 const error = ref('');
 const router = useRouter();
@@ -81,7 +83,10 @@ const fetchAbsences = async () => {
       const errData = await response.json();
       throw new Error(errData.details || 'Failed to fetch absences');
     }
-    absences.value = await response.json();
+    const data = await response.json();
+    absences.value = data.absences;
+    totalCount.value = data.totalCount;
+    unexcusedCount.value = data.unexcusedCount;
   } catch (err: any) {
     error.value = err.message || 'An error occurred';
   } finally {
@@ -96,11 +101,11 @@ const logout = () => {
   router.push('/');
 };
 
-// Absences not yet excused in WebUntis — the ones still needing action.
-const totalAbsenceCount = computed(() => absences.value.length);
-const openAbsenceCount = computed(
-  () => absences.value.filter((a) => !a.isExcusedUntis).length,
-);
+// Stat-card totals come from the Absence table (via the API), so they stay
+// correct after the student submits excuses — unlike absences.value, which
+// only holds the still-open list that drives the actionable view.
+const totalAbsenceCount = computed(() => totalCount.value);
+const openAbsenceCount = computed(() => unexcusedCount.value);
 
 // --- Filtered Absences ---
 const filteredAbsences = computed(() => {

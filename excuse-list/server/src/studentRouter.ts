@@ -5,7 +5,7 @@ import { requireStudent } from '../middleware/roleGuard';
 import { getAbsencesByStudent } from '../data/absenceRepository';
 import { getStudentParent, } from '../data/parentRepository';
 import { updateAbsenceWithExcuse, insertAttachments, validateAttachments } from '../data/excuseRepository';
-import { getSubjectAbsenceStats, getStudentHeatmapData, AnalyticsMode } from '../data/analyticsRepository';
+import { getSubjectAbsenceStats, getStudentHeatmapData, getStudentAbsenceSummary, AnalyticsMode } from '../data/analyticsRepository';
 
 
 const router = Router();
@@ -14,13 +14,28 @@ router.get('/api/absences', verifyJwt, async (req, res) => {
   try {
     console.log(`Fetching absences for user: ${req.user!.username}`);
 
-    const absences = getAbsencesByStudent(req.user!.untisId!);
+    const studentId = req.user!.untisId!;
+    const absences = getAbsencesByStudent(studentId);
     console.log(`Fetched ${absences.length} total absences`);
 
-    const unexcused = absences.filter((a) => a.status === 'open');
-    console.log(`Filtered to ${unexcused.length} open absences`);
+    const open = absences.filter((a) => a.status === 'open');
+    console.log(`Filtered to ${open.length} open absences`);
 
-    res.json(unexcused);
+    // The open list drives the actionable "Meine Fehlstunden" view. The stat
+    // cards count lesson-hours (Einheiten) from AbsenceLesson — the full record
+    // that also keeps already-excused lessons, which the Absence table drops on
+    // sync. "Nicht entschuldigt" = everything not excused (open/pending +
+    // teacher-marked unexcused).
+    const db = new Unit(true);
+    const student = db.prepare(`SELECT className FROM Student WHERE untisId = ?`).get(studentId) as any;
+    db.complete(null);
+    const summary = student
+      ? getStudentAbsenceSummary(studentId, student.className)
+      : null;
+    const totalCount = summary?.totalHours ?? 0;
+    const unexcusedCount = (summary?.unexcusedHours ?? 0) + (summary?.notExcusedHours ?? 0);
+
+    res.json({ absences: open, totalCount, unexcusedCount });
   } catch (error: any) {
     console.error('Error fetching absences:', error.message);
     res.status(500).json({ error: 'Error fetching absences' });
