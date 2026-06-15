@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import LightingMode from '@/components/LightingMode.vue';
 
@@ -69,11 +69,12 @@ const formatTime = (timeNum: number) => {
   return `${s.substring(0, 2)}:${s.substring(2, 4)}`;
 };
 
-const fetchAbsences = async () => {
+// `silent` skips the loading spinner / error banner — used for the background
+// refetches that catch up with the post-login timetable sync.
+const fetchAbsences = async (silent = false) => {
   const token = localStorage.getItem('untis_jwt');
   if (!token) { router.push('/'); return; }
-  loading.value = true;
-  error.value = '';
+  if (!silent) { loading.value = true; error.value = ''; }
   try {
     const response = await fetch('/api/absences', {
       headers: { Authorization: `Bearer ${token}` },
@@ -88,13 +89,37 @@ const fetchAbsences = async () => {
     totalCount.value = data.totalCount;
     unexcusedCount.value = data.unexcusedCount;
   } catch (err: any) {
-    error.value = err.message || 'An error occurred';
+    if (!silent) error.value = err.message || 'An error occurred';
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
-onMounted(fetchAbsences);
+// The timetable sync that populates AbsenceLesson runs in the background after
+// login, so the very first load can show stale (0) counts. Refetch a few times
+// with backoff to catch up once the sync lands, and again when the user returns
+// to the tab. Timers are cleared on unmount.
+const syncRefetchTimers: ReturnType<typeof setTimeout>[] = [];
+const scheduleSyncRefetches = () => {
+  for (const delay of [1500, 4000, 8000]) {
+    syncRefetchTimers.push(setTimeout(() => fetchAbsences(true), delay));
+  }
+};
+
+const refetchOnFocus = () => {
+  if (document.visibilityState === 'visible') fetchAbsences(true);
+};
+
+onMounted(async () => {
+  await fetchAbsences();
+  scheduleSyncRefetches();
+  document.addEventListener('visibilitychange', refetchOnFocus);
+});
+
+onUnmounted(() => {
+  syncRefetchTimers.forEach(clearTimeout);
+  document.removeEventListener('visibilitychange', refetchOnFocus);
+});
 
 const logout = () => {
   localStorage.removeItem('untis_jwt');
@@ -349,7 +374,7 @@ const percentageClass = (p: number | null) => {
             <button @click="showAnalytics = false" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', !showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Liste</button>
             <button @click="toggleAnalytics" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Analyse</button>
           </div>
-          <button v-if="!showAnalytics" @click="fetchAbsences" class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold px-3.5 py-2 text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer">
+          <button v-if="!showAnalytics" @click="fetchAbsences()" class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold px-3.5 py-2 text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer">
             <svg class="w-3.5 h-3.5 text-slate-450" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             Aktualisieren
           </button>
