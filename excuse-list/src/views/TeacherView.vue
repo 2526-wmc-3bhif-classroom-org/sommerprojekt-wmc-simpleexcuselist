@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import TimetableHeatmap from '@/components/TimetableHeatmap.vue'
+import { subjectColor } from '@/utils/subjectColor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,14 @@ interface StudentTopSubjects {
   top3: SubjectStat[]
 }
 
+interface BehaviorEntry {
+  untisId: number
+  firstName: string
+  lastName: string
+  totalHours: number
+  unexcusedHours: number
+}
+
 interface AnalyticsPayload {
   stats: SubjectStat[]
   heatmap: HeatmapCell[]
@@ -90,6 +99,9 @@ const classAnalytics = ref<ClassAnalyticsPayload>({ stats: [], heatmap: [], stud
 const loadingClassAnalytics = ref(false)
 const classFrom = ref('')
 const classTo = ref('')
+
+// Behavior summary (all students, all absences regardless of status)
+const behaviorSummary = ref<BehaviorEntry[]>([])
 
 // Attachments modal
 const showAttachmentModal = ref(false)
@@ -147,6 +159,54 @@ const percentageClass = (p: number | null) => {
   if (p <= 40) return 'bg-yellow-100 text-yellow-700'
   return 'bg-red-100 text-red-700'
 }
+
+// ─── Behavior grade ──────────────────────────────────────────────────────────
+
+interface BehaviorGrade {
+  label: string
+  color: string
+  bgClass: string
+  textClass: string
+  borderClass: string
+}
+
+function behaviorGrade(hours: number): BehaviorGrade {
+  if (hours <= 7)  return { label: 'Sehr Zufriedenstellend',   color: '#16a34a', bgClass: 'bg-green-100',  textClass: 'text-green-700',  borderClass: 'border-green-300' }
+  if (hours <= 14) return { label: 'Zufriedenstellend',        color: '#65a30d', bgClass: 'bg-lime-100',   textClass: 'text-lime-700',   borderClass: 'border-lime-300' }
+  if (hours <= 22) return { label: 'Wenig Zufriedenstellend',  color: '#ea580c', bgClass: 'bg-orange-100', textClass: 'text-orange-700', borderClass: 'border-orange-300' }
+  return              { label: 'Nicht Zufriedenstellend',  color: '#dc2626', bgClass: 'bg-red-100',    textClass: 'text-red-700',    borderClass: 'border-red-300' }
+}
+
+const BEHAVIOR_TIERS = [
+  { label: 'Sehr Zufriedenstellend',  range: '0–7 EH',   min: 0,  max: 7  },
+  { label: 'Zufriedenstellend',       range: '8–14 EH',  min: 8,  max: 14 },
+  { label: 'Wenig Zufriedenstellend', range: '15–22 EH', min: 15, max: 22 },
+  { label: 'Nicht Zufriedenstellend', range: '≥ 23 EH',  min: 23, max: Infinity },
+]
+
+const behaviorMap = computed(() => {
+  const m = new Map<number, BehaviorEntry>()
+  for (const e of behaviorSummary.value) m.set(e.untisId, e)
+  return m
+})
+
+// Sorted by unexcused hours descending — that's what drives the grade
+const sortedBehavior = computed(() =>
+  [...behaviorSummary.value].sort((a, b) => b.unexcusedHours - a.unexcusedHours),
+)
+
+const behaviorTierCounts = computed(() =>
+  BEHAVIOR_TIERS.map((t) => ({
+    ...t,
+    count: behaviorSummary.value.filter((e) => e.unexcusedHours >= t.min && e.unexcusedHours <= t.max).length,
+    grade: behaviorGrade(t.min),
+  })),
+)
+
+// Sum of all-absences across the whole class (shown next to Zeitraum filter)
+const classTotalHours = computed(() =>
+  behaviorSummary.value.reduce((sum, e) => sum + e.totalHours, 0),
+)
 
 // ─── Chart builders ───────────────────────────────────────────────────────────
 // The heatmap is the timetable-style grid in TimetableHeatmap.vue (fed directly
@@ -318,7 +378,16 @@ const logout = () => {
 
 const activeAbsences = computed(() => absences.value.filter((a) => a.status === 'signed'))
 
-onMounted(fetchStudents)
+const fetchBehaviorSummary = async () => {
+  const token = getToken()
+  if (!token) return
+  try {
+    const res = await fetch('/api/teacher/class/behavior', { headers: { Authorization: `Bearer ${token}` } })
+    if (res.ok) behaviorSummary.value = await res.json()
+  } catch {}
+}
+
+onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
 </script>
 
 <template>
@@ -374,7 +443,19 @@ onMounted(fetchStudents)
                   {{ student.lastName }}, {{ student.firstName }}
                 </p>
               </div>
-              <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="selectedStudent?.untisId === student.untisId">
+              <!-- Behavior indicator: unexcused hours + grade color dot -->
+              <div v-if="behaviorMap.has(student.untisId)" class="flex items-center gap-1 ml-2 flex-shrink-0">
+                <span
+                  class="text-[11px] font-bold tabular-nums"
+                  :style="{ color: behaviorGrade(behaviorMap.get(student.untisId)!.unexcusedHours).color }"
+                  :title="`${behaviorGrade(behaviorMap.get(student.untisId)!.unexcusedHours).label} · ${behaviorMap.get(student.untisId)!.unexcusedHours} unentschuldigte EH`"
+                >{{ behaviorMap.get(student.untisId)!.unexcusedHours }}</span>
+                <span
+                  class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  :style="{ background: behaviorGrade(behaviorMap.get(student.untisId)!.unexcusedHours).color }"
+                ></span>
+              </div>
+              <svg class="h-4 w-4 text-gray-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="selectedStudent?.untisId === student.untisId">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -445,6 +526,13 @@ onMounted(fetchStudents)
                   class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
               <button v-if="classFrom || classTo" @click="clearClassRange"
                 class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
+              <!-- Class-wide total (all statuses, unfiltered) -->
+              <div class="ml-auto flex items-center gap-2 flex-shrink-0">
+                <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Fehlstunden gesamt:</span>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-bold text-sm bg-gray-100 text-gray-700 border border-gray-200">
+                  {{ classTotalHours }} EH
+                </span>
+              </div>
             </div>
 
             <div v-if="loadingClassAnalytics" class="p-12 flex-grow flex items-center justify-center">
@@ -457,6 +545,41 @@ onMounted(fetchStudents)
               <p class="text-gray-500 text-sm font-medium">Noch keine Absenzen für diese Klasse erfasst.</p>
             </div>
             <div v-else class="flex-grow overflow-y-auto min-h-0 p-6">
+
+              <!-- ── Verhaltensnoten-Übersicht ────────────────────────── -->
+              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Verhaltensnoten (nach nicht entschuldigten Fehlstunden)</h3>
+
+              <!-- Student behavior table -->
+              <table class="w-full text-sm text-left border-collapse mb-8">
+                <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                  <tr>
+                    <th class="px-4 py-2.5 font-semibold">Schüler</th>
+                    <th class="px-4 py-2.5 font-semibold text-right">Unentschuldigt</th>
+                    <th class="px-4 py-2.5 font-semibold text-right">Gesamt</th>
+                    <th class="px-4 py-2.5 font-semibold">Verhaltensnote</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="entry in sortedBehavior" :key="entry.untisId" class="hover:bg-gray-50/50">
+                    <td class="px-4 py-2.5 font-semibold text-gray-900">{{ entry.lastName }}, {{ entry.firstName }}</td>
+                    <td class="px-4 py-2.5 text-right">
+                      <span
+                        :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-bold text-sm', behaviorGrade(entry.unexcusedHours).bgClass, behaviorGrade(entry.unexcusedHours).textClass]"
+                      >{{ entry.unexcusedHours }} EH</span>
+                    </td>
+                    <td class="px-4 py-2.5 text-right text-gray-500 tabular-nums">{{ entry.totalHours }} EH</td>
+                    <td class="px-4 py-2.5">
+                      <span
+                        :class="['inline-flex items-center gap-1.5 px-2.5 py-1 rounded border font-semibold text-xs', behaviorGrade(entry.unexcusedHours).bgClass, behaviorGrade(entry.unexcusedHours).textClass, behaviorGrade(entry.unexcusedHours).borderClass]"
+                      >
+                        <span class="w-2 h-2 rounded-full flex-shrink-0" :style="{ background: behaviorGrade(entry.unexcusedHours).color }"></span>
+                        {{ behaviorGrade(entry.unexcusedHours).label }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
               <!-- Heatmap + Pie -->
               <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
                 <div class="border border-gray-200 rounded-lg p-4">
@@ -483,7 +606,12 @@ onMounted(fetchStudents)
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                   <tr v-for="s in classAnalytics.stats" :key="s.subjectName" class="hover:bg-gray-50/50">
-                    <td class="px-6 py-3 font-semibold text-gray-900">{{ s.subjectName }}</td>
+                    <td class="px-6 py-3">
+                      <span
+                        class="inline-flex items-center px-2.5 py-0.5 rounded font-bold text-white text-xs"
+                        :style="{ background: subjectColor(s.subjectName) }"
+                      >{{ s.subjectName }}</span>
+                    </td>
                     <td class="px-6 py-3 text-gray-600">{{ s.subjectLongName || '—' }}</td>
                     <td class="px-6 py-3 text-right">
                       <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', severityClass(s.missedLessons)]">{{ s.missedLessons }}</span>
@@ -512,8 +640,13 @@ onMounted(fetchStudents)
                     <td class="px-6 py-3 font-semibold text-gray-900">{{ row.lastName }}, {{ row.firstName }}</td>
                     <td v-for="i in 3" :key="i" class="px-6 py-3">
                       <template v-if="row.top3[i - 1]">
-                        <span class="font-semibold text-gray-800">{{ row.top3[i - 1]!.subjectName }}</span>
-                        <span class="text-gray-400 ml-1 text-xs">{{ row.top3[i - 1]!.percentage !== null ? row.top3[i - 1]!.percentage + '%' : row.top3[i - 1]!.missedLessons + 'x' }}</span>
+                        <span class="inline-flex items-center gap-1.5">
+                          <span
+                            class="inline-flex items-center px-2 py-0.5 rounded font-bold text-white text-xs"
+                            :style="{ background: subjectColor(row.top3[i - 1]!.subjectName) }"
+                          >{{ row.top3[i - 1]!.subjectName }}</span>
+                          <span class="text-gray-400 text-xs">{{ row.top3[i - 1]!.percentage !== null ? row.top3[i - 1]!.percentage + '%' : row.top3[i - 1]!.missedLessons + '×' }}</span>
+                        </span>
                       </template>
                       <span v-else class="text-gray-300">—</span>
                     </td>
@@ -557,8 +690,8 @@ onMounted(fetchStudents)
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
             <!-- Analytics -->
             <div v-if="showAnalytics" class="flex-1 flex flex-col min-h-0">
-              <!-- Summary Bar (Total Hours) -->
-              <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm">
+              <!-- Summary Bar (Total Hours + Behavior Grade) -->
+              <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm flex-wrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Gesamte Fehlstunden:</span>
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-primary/10 text-primary border border-primary/20">
@@ -567,9 +700,25 @@ onMounted(fetchStudents)
                 </div>
                 <div class="h-4 w-px bg-gray-200"></div>
                 <div class="flex items-center gap-2">
-                  <span class="text-xs font-semibold text-gray-550 uppercase tracking-wider">Davon unentschuldigt:</span>
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Davon unentschuldigt:</span>
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
                     {{ unexcusedHours }} EH
+                  </span>
+                </div>
+                <div class="h-4 w-px bg-gray-200"></div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Verhaltensnote:</span>
+                  <span
+                    v-if="selectedStudent && behaviorMap.has(selectedStudent.untisId)"
+                    :class="['inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-semibold border text-xs',
+                      behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).bgClass,
+                      behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).textClass,
+                      behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).borderClass]"
+                  >
+                    <span class="w-2 h-2 rounded-full flex-shrink-0"
+                      :style="{ background: behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).color }"
+                    ></span>
+                    {{ behaviorGrade(behaviorMap.get(selectedStudent.untisId)!.unexcusedHours).label }}
                   </span>
                 </div>
               </div>
@@ -621,7 +770,12 @@ onMounted(fetchStudents)
                   </thead>
                   <tbody class="divide-y divide-gray-100">
                     <tr v-for="s in analytics.stats" :key="s.subjectName" class="hover:bg-gray-50/50">
-                      <td class="px-6 py-3 font-semibold text-gray-900">{{ s.subjectName }}</td>
+                      <td class="px-6 py-3">
+                        <span
+                          class="inline-flex items-center px-2.5 py-0.5 rounded font-bold text-white text-xs"
+                          :style="{ background: subjectColor(s.subjectName) }"
+                        >{{ s.subjectName }}</span>
+                      </td>
                       <td class="px-6 py-3 text-gray-600">{{ s.subjectLongName || '—' }}</td>
                       <td class="px-6 py-3 text-right"><span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', severityClass(s.missedLessons)]">{{ s.missedLessons }}</span></td>
                       <td class="px-6 py-3 text-right text-gray-500">{{ s.totalLessons ?? '—' }}</td>
