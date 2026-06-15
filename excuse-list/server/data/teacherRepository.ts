@@ -58,7 +58,8 @@ export function getClassBehaviorSummary(className: string) {
   const db = new Unit(true);
   const rows = db.prepare(`
     SELECT s.untisId, s.firstName, s.lastName,
-           COUNT(al.id) AS totalHours
+           COUNT(al.id) AS totalHours,
+           COUNT(CASE WHEN al.absenceStatus IN ('open', 'pending') THEN 1 END) AS unexcusedHours
     FROM Student s
     LEFT JOIN AbsenceLesson al ON al.studentUntisId = s.untisId
     WHERE s.className = ?
