@@ -647,6 +647,24 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
             </div>
           </div>
 
+          <!-- Stat cards: all-time totals for the selected student -->
+          <div class="flex items-center gap-4 mb-6 flex-shrink-0 flex-wrap">
+            <div class="flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-5 py-3 shadow-sm">
+              <div class="flex flex-col">
+                <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Fehlstunden gesamt</span>
+                <span class="text-3xl font-black text-gray-900 tabular-nums leading-tight">{{ totalHours }}</span>
+              </div>
+              <span class="text-sm text-gray-400 font-semibold self-end pb-0.5">EH</span>
+            </div>
+            <div class="flex items-center gap-3 bg-white border border-red-200 rounded-lg px-5 py-3 shadow-sm">
+              <div class="flex flex-col">
+                <span class="text-[11px] font-semibold text-red-400 uppercase tracking-wider">Nicht entschuldigt</span>
+                <span class="text-3xl font-black text-red-600 tabular-nums leading-tight">{{ unexcusedHours }}</span>
+              </div>
+              <span class="text-sm text-red-400 font-semibold self-end pb-0.5">EH</span>
+            </div>
+          </div>
+
           <!-- Content card -->
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
             <!-- Analytics -->
