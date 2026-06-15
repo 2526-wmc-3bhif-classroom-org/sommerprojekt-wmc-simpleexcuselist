@@ -1,253 +1,999 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import VueApexCharts from 'vue3-apexcharts'
+import type { ApexOptions } from 'apexcharts'
+import TimetableHeatmap from '@/components/TimetableHeatmap.vue'
+import { subjectColor } from '@/utils/subjectColor'
 
-type ExcuseStatus = 'confirmed' | 'pending'
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ExcuseEntry {
-  id: number
-  name: string
-  date: string
-  reason: string
-  status: ExcuseStatus
-  class: string
+interface Student {
+  untisId: number
+  firstName: string
+  lastName: string
+  className: string
 }
 
-const excuses = ref<ExcuseEntry[]>([
-  { id: 1, name: 'Kerimcan Yagci', date: '24.03.2026', reason: 'Arztbesuch', status: 'confirmed', class: '3BHIF' },
-  { id: 2, name: 'Max Mustermann', date: '23.03.2026', reason: 'Verspätung', status: 'pending', class: '3BHIF' },
-  { id: 5, name: 'Max Mustermann', date: '12.03.2026', reason: 'Arzttermin', status: 'confirmed', class: '3BHIF' },
-  { id: 3, name: 'Lisa Schmidt', date: '22.03.2026', reason: 'Privat', status: 'confirmed', class: '3BHIF' },
-  { id: 4, name: 'Felix Weber', date: '21.03.2026', reason: 'Kein Grund', status: 'pending', class: '3BHIF' },
-])
+interface Absence {
+  id: string
+  date: number
+  startTime: number
+  endTime: number
+  status: string
+  excuseMessage?: string
+  attachmentCount: number
+}
 
-// Edit State
-const activeEntry = ref<ExcuseEntry | null>(null)
-const reasonDraft = ref('')
-const customReasonDraft = ref('')
-const statusDraft = ref<ExcuseStatus>('pending')
+interface Attachment {
+  fileName: string
+  fileData: string
+}
 
-const reasonsConfirmed = ['Arztbesuch', 'Führerscheinprüfung', 'Bewerbungsgespräch', 'Krankheit', 'Familiärer Termin', 'Sonstiges']
-const reasonsPending = ['Verspätung', 'Kein Grund', 'Unentschuldigt Ferngeblieben', 'Sonstiges']
+interface SubjectStat {
+  subjectName: string
+  subjectLongName: string
+  missedLessons: number
+  totalLessons: number | null
+  percentage: number | null
+}
 
-// Search Logic
-const searchInput = ref('')
-const appliedSearch = ref('')
-const showSuggestions = ref(false)
+interface HeatmapCell {
+  dayOfWeek: number
+  period: number
+  count: number
+}
 
-const filteredExcuses = computed(() => {
-  const query = appliedSearch.value.trim().toLowerCase()
-  return query ? excuses.value.filter(item => item.name.toLowerCase().includes(query)) : excuses.value
+interface StudentTopSubjects {
+  untisId: number
+  firstName: string
+  lastName: string
+  top3: SubjectStat[]
+}
+
+interface BehaviorEntry {
+  untisId: number
+  firstName: string
+  lastName: string
+  totalHours: number
+  notExcusedHours: number
+}
+
+interface AnalyticsPayload {
+  stats: SubjectStat[]
+  heatmap: HeatmapCell[]
+  totalHours: number
+  unexcusedHours: number
+  notExcusedHours: number
+}
+
+interface ClassAnalyticsPayload {
+  stats: SubjectStat[]
+  heatmap: HeatmapCell[]
+  studentTable: StudentTopSubjects[]
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+const router = useRouter()
+const students = ref<Student[]>([])
+const selectedStudent = ref<Student | null>(null)
+const absences = ref<Absence[]>([])
+const loadingStudents = ref(true)
+const loadingAbsences = ref(false)
+const error = ref('')
+const teacherName = ref('')
+const teacherClass = ref('')
+const totalHours = ref(0)
+const unexcusedHours = ref(0)
+const notExcusedHours = ref(0)
+
+
+// Student analytics
+const showAnalytics = ref(false)
+const analyticsMode = ref<'open' | 'all'>('open')
+const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0, notExcusedHours: 0 })
+const loadingAnalytics = ref(false)
+// Date-range filter (YYYY-MM-DD from native date inputs); empty = unbounded.
+const analyticsFrom = ref('')
+const analyticsTo = ref('')
+
+// Class analytics — always over all absences (no open/all toggle).
+const showClassAnalytics = ref(false)
+const classAnalytics = ref<ClassAnalyticsPayload>({ stats: [], heatmap: [], studentTable: [] })
+const loadingClassAnalytics = ref(false)
+const classFrom = ref('')
+const classTo = ref('')
+
+// Behavior summary (all students, all absences regardless of status)
+const behaviorSummary = ref<BehaviorEntry[]>([])
+
+// List tab
+const listTab = ref<'signed' | 'open' | 'pending'>('signed')
+
+// Attachments modal
+const showAttachmentModal = ref(false)
+const loadingAttachments = ref(false)
+const activeAttachments = ref<Attachment[]>([])
+const activeExcuseMessage = ref('')
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const getToken = () => {
+  const token = localStorage.getItem('untis_jwt')
+  if (!token) { router.push('/'); return null }
+  return token
+}
+
+const decodeToken = (token: string) => {
+  try {
+    const base64Url = token.split('.')[1]!;
+    const padLength = (4 - (base64Url.length % 4)) % 4;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLength);
+    const payload = JSON.parse(atob(base64));
+    teacherName.value = payload.username || ''
+    teacherClass.value = payload.className || ''
+  } catch {}
+}
+
+const formatDate = (dateNum: number) => {
+  const s = dateNum.toString()
+  return `${s.substring(6, 8)}.${s.substring(4, 6)}.${s.substring(0, 4)}`
+}
+
+const formatTime = (timeNum: number) => {
+  const s = timeNum.toString().padStart(4, '0')
+  return `${s.substring(0, 2)}:${s.substring(2, 4)}`
+}
+
+// Builds the &from=&to= query fragment for the analytics endpoints (omits empties).
+const rangeQuery = (from: string, to: string) => {
+  const p = new URLSearchParams()
+  if (from) p.set('from', from)
+  if (to) p.set('to', to)
+  const s = p.toString()
+  return s ? `&${s}` : ''
+}
+
+const severityClass = (n: number) => {
+  if (n <= 2) return 'bg-green-100 text-green-700'
+  if (n <= 5) return 'bg-yellow-100 text-yellow-700'
+  return 'bg-red-100 text-red-700'
+}
+
+const percentageClass = (p: number | null) => {
+  if (p === null) return 'bg-gray-100 text-gray-500'
+  if (p <= 20) return 'bg-green-100 text-green-700'
+  if (p <= 40) return 'bg-yellow-100 text-yellow-700'
+  return 'bg-red-100 text-red-700'
+}
+
+// ─── Behavior grade ──────────────────────────────────────────────────────────
+
+interface BehaviorGrade {
+  label: string
+  color: string
+  bgClass: string
+  textClass: string
+  borderClass: string
+}
+
+function behaviorGrade(hours: number): BehaviorGrade {
+  if (hours <= 7)  return { label: 'Sehr Zufriedenstellend',   color: '#16a34a', bgClass: 'bg-green-100',  textClass: 'text-green-700',  borderClass: 'border-green-300' }
+  if (hours <= 14) return { label: 'Zufriedenstellend',        color: '#65a30d', bgClass: 'bg-lime-100',   textClass: 'text-lime-700',   borderClass: 'border-lime-300' }
+  if (hours <= 22) return { label: 'Wenig Zufriedenstellend',  color: '#ea580c', bgClass: 'bg-orange-100', textClass: 'text-orange-700', borderClass: 'border-orange-300' }
+  return              { label: 'Nicht Zufriedenstellend',  color: '#dc2626', bgClass: 'bg-red-100',    textClass: 'text-red-700',    borderClass: 'border-red-300' }
+}
+
+const BEHAVIOR_TIERS = [
+  { label: 'Sehr Zufriedenstellend',  range: '0–7 EH',   min: 0,  max: 7  },
+  { label: 'Zufriedenstellend',       range: '8–14 EH',  min: 8,  max: 14 },
+  { label: 'Wenig Zufriedenstellend', range: '15–22 EH', min: 15, max: 22 },
+  { label: 'Nicht Zufriedenstellend', range: '≥ 23 EH',  min: 23, max: Infinity },
+]
+
+const behaviorMap = computed(() => {
+  const m = new Map<number, BehaviorEntry>()
+  for (const e of behaviorSummary.value) m.set(e.untisId, e)
+  return m
 })
 
-const openEditor = (entry: ExcuseEntry) => {
-  activeEntry.value = entry
-  statusDraft.value = entry.status
-  reasonDraft.value = entry.reason
-  // Falls der Grund nicht in den Listen ist, ist es "Sonstiges"
-  const allPredefined = [...reasonsConfirmed, ...reasonsPending]
-  if (!allPredefined.includes(entry.reason)) {
-    reasonDraft.value = 'Sonstiges'
-    customReasonDraft.value = entry.reason
-  } else {
-    customReasonDraft.value = ''
+// Sorted by unexcused hours descending — that's what drives the grade
+const sortedBehavior = computed(() =>
+  [...behaviorSummary.value].sort((a, b) => b.notExcusedHours - a.notExcusedHours),
+)
+
+const behaviorTierCounts = computed(() =>
+  BEHAVIOR_TIERS.map((t) => ({
+    ...t,
+    count: behaviorSummary.value.filter((e) => e.notExcusedHours >= t.min && e.notExcusedHours <= t.max).length,
+    grade: behaviorGrade(t.min),
+  })),
+)
+
+// Sum of all-absences across the whole class (shown next to Zeitraum filter)
+const classTotalHours = computed(() =>
+  behaviorSummary.value.reduce((sum, e) => sum + e.totalHours, 0),
+)
+
+// ─── Chart builders ───────────────────────────────────────────────────────────
+// The heatmap is the timetable-style grid in TimetableHeatmap.vue (fed directly
+// with the heatmap cells). Only the pie chart still uses ApexCharts.
+
+function buildPieSeries(stats: SubjectStat[]) {
+  return {
+    series: stats.map((s) => s.missedLessons),
+    labels: stats.map((s) => s.subjectName),
   }
 }
 
-const saveChanges = () => {
-  if (!activeEntry.value) return
-  const entry = excuses.value.find(e => e.id === activeEntry.value?.id)
-  if (entry) {
-    entry.status = statusDraft.value
-    entry.reason = reasonDraft.value === 'Sonstiges' ? customReasonDraft.value : reasonDraft.value
-  }
-  activeEntry.value = null
+const pieOptions: ApexOptions = {
+  chart: { type: 'pie', toolbar: { show: false } },
+  legend: { position: 'bottom' },
+  // Slice share = proportion of all missed lessons (spec Q8); tooltip shows the
+  // absolute count behind each slice.
+  tooltip: { y: { formatter: (v: number) => `${v} Fehlstunden` } },
+  dataLabels: { formatter: (v: number) => `${Math.round(Number(v))}%` },
 }
 
-const hideSuggestions = () => setTimeout(() => showSuggestions.value = false, 120)
+// ─── Computed chart data ──────────────────────────────────────────────────────
+
+const studentPie = computed(() => buildPieSeries(analytics.value.stats))
+const classPie = computed(() => buildPieSeries(classAnalytics.value.stats))
+
+// ─── Data fetching ────────────────────────────────────────────────────────────
+
+const fetchStudents = async () => {
+  const token = getToken()
+  if (!token) return
+  decodeToken(token)
+  loadingStudents.value = true
+  error.value = ''
+  try {
+    const res = await fetch('/api/teacher/students', { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) {
+      if (res.status === 401) { localStorage.removeItem('untis_jwt'); router.push('/'); return }
+      throw new Error(`Fehler (${res.status})`)
+    }
+    students.value = await res.json()
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Schüler'
+  } finally {
+    loadingStudents.value = false
+  }
+}
+
+const fetchStudentAbsences = async () => {
+  if (!selectedStudent.value) return
+  const token = getToken()
+  if (!token) return
+  loadingAbsences.value = true
+  try {
+    const rq = rangeQuery(analyticsFrom.value, analyticsTo.value)
+    const res = await fetch(
+      `/api/teacher/students/${selectedStudent.value.untisId}/absences${rq ? rq.replace(/^&/, '?') : ''}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (!res.ok) throw new Error(`Fehler (${res.status})`)
+    const data = await res.json()
+    absences.value = data.absences
+    totalHours.value = data.totalHours
+    unexcusedHours.value = data.unexcusedHours
+    notExcusedHours.value = data.notExcusedHours ?? 0
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Absenzen'
+  } finally {
+    loadingAbsences.value = false
+  }
+}
+
+const onRangeChange = () => {
+  fetchStudentAbsences()
+  if (showAnalytics.value) fetchAnalytics()
+}
+
+const selectStudent = async (student: Student) => {
+  selectedStudent.value = student
+  absences.value = []
+  totalHours.value = 0
+  unexcusedHours.value = 0
+  notExcusedHours.value = 0
+  analytics.value = { stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0, notExcusedHours: 0 }
+  analyticsFrom.value = ''
+  analyticsTo.value = ''
+  showAnalytics.value = false
+  showClassAnalytics.value = false
+  listTab.value = 'signed'
+  await fetchStudentAbsences()
+}
+
+const fetchAnalytics = async () => {
+  if (!selectedStudent.value) return
+  const token = getToken()
+  if (!token) return
+  loadingAnalytics.value = true
+  try {
+    const res = await fetch(
+      `/api/teacher/students/${selectedStudent.value.untisId}/analytics?mode=${analyticsMode.value}${rangeQuery(analyticsFrom.value, analyticsTo.value)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (!res.ok) throw new Error(`Fehler (${res.status})`)
+    analytics.value = await res.json()
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Analyse'
+  } finally {
+    loadingAnalytics.value = false
+  }
+}
+
+const fetchClassAnalytics = async () => {
+  const token = getToken()
+  if (!token) return
+  loadingClassAnalytics.value = true
+  try {
+    const res = await fetch(`/api/teacher/class/analytics?mode=all${rangeQuery(classFrom.value, classTo.value)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error(`Fehler (${res.status})`)
+    classAnalytics.value = await res.json()
+  } catch (err: any) {
+    error.value = err.message || 'Fehler beim Laden der Klassen-Analyse'
+  } finally {
+    loadingClassAnalytics.value = false
+  }
+}
+
+const toggleAnalytics = () => {
+  showAnalytics.value = !showAnalytics.value
+  if (showAnalytics.value) fetchAnalytics()
+}
+
+const setAnalyticsMode = (mode: 'open' | 'all') => {
+  analyticsMode.value = mode
+  fetchAnalytics()
+}
+
+const toggleClassAnalytics = () => {
+  showClassAnalytics.value = true
+  selectedStudent.value = null
+  fetchClassAnalytics()
+}
+
+const clearAnalyticsRange = () => {
+  analyticsFrom.value = ''
+  analyticsTo.value = ''
+  onRangeChange()
+}
+
+const clearClassRange = () => {
+  classFrom.value = ''
+  classTo.value = ''
+  fetchClassAnalytics()
+}
+
+const viewAttachments = async (absence: Absence) => {
+  activeExcuseMessage.value = absence.excuseMessage || ''
+  activeAttachments.value = []
+  showAttachmentModal.value = true
+  const token = getToken()
+  if (!token) return
+  loadingAttachments.value = true
+  try {
+    const res = await fetch(`/api/absences/${absence.id}/attachments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) activeAttachments.value = await res.json()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loadingAttachments.value = false
+  }
+}
+
+const closeAttachmentModal = () => {
+  showAttachmentModal.value = false
+  activeAttachments.value = []
+  activeExcuseMessage.value = ''
+}
+
+const logout = () => {
+  localStorage.removeItem('untis_jwt')
+  router.push('/')
+}
+
+const signedAbsences = computed(() => absences.value.filter((a) => a.status === 'signed'))
+const openAbsences = computed(() => absences.value.filter((a) => a.status === 'open'))
+const pendingAbsences = computed(() => absences.value.filter((a) => a.status === 'pending'))
+const activeAbsences = computed(() => {
+  if (listTab.value === 'open') return openAbsences.value
+  if (listTab.value === 'pending') return pendingAbsences.value
+  return signedAbsences.value
+})
+
+const fetchBehaviorSummary = async () => {
+  const token = getToken()
+  if (!token) return
+  try {
+    const res = await fetch('/api/teacher/class/behavior', { headers: { Authorization: `Bearer ${token}` } })
+    if (res.ok) behaviorSummary.value = await res.json()
+  } catch {}
+}
+
+onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
 </script>
 
 <template>
-  <div class="min-h-screen px-6 py-8">
-    <div class="max-w-[1600px] mx-auto">
-      <!-- Header -->
-      <div class="mb-8 flex justify-between items-start">
-        <div>
-          <h1 class="text-4xl font-black text-gray-900 uppercase tracking-tight">
-            Lehrer-Dashboard
-          </h1>
-          <p class="text-gray-500 text-sm mt-2">Verwaltung von Entschuldigungen</p>
-        </div>
-        <div class="text-right bg-white rounded-xl px-6 py-4 shadow-sm border border-gray-200">
-          <div class="text-xs font-bold text-gray-400 uppercase tracking-wide">Offen</div>
-          <div class="text-3xl font-black text-blue-600">{{ excuses.filter(e => e.status === 'pending').length }}</div>
-        </div>
+  <div class="h-screen w-full flex bg-[#f4f5f7] overflow-hidden font-sans">
+
+    <!-- Left Sidebar: Navigation & Student List -->
+    <aside class="w-80 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col h-full z-10 shadow-sm relative">
+      <!-- Sidebar Header -->
+      <div class="h-16 flex items-center px-6 border-b border-gray-200 bg-white">
+        <h1 class="text-xl font-bold text-gray-900 tracking-tight">Klasse <span class="text-primary">{{ teacherClass }}</span></h1>
       </div>
 
-      <!-- Search Bar -->
-      <div class="mb-8">
-        <div class="flex gap-2 max-w-md">
-          <input
-            v-model="searchInput"
-            type="text"
-            class="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            placeholder="Schüler suchen..."
-            @focus="showSuggestions = true"
-            @blur="hideSuggestions"
-            @keyup.enter="appliedSearch = searchInput"
-          />
-          <button @click="appliedSearch = searchInput" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold text-sm transition">
-            Suchen
-          </button>
-        </div>
+      <!-- Class analytics entry + student count -->
+      <div class="px-4 py-3 border-b border-gray-200">
+        <button
+          @click="toggleClassAnalytics"
+          :class="[
+            'w-full flex items-center justify-between px-4 py-2.5 rounded text-sm font-semibold transition-colors outline-none',
+            showClassAnalytics
+              ? 'bg-primary/10 text-primary border border-primary/30'
+              : 'text-gray-700 hover:bg-gray-50 border border-gray-200'
+          ]"
+        >
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13h4v8H3v-8zm7-6h4v14h-4V7zm7-4h4v18h-4V3z"/></svg>
+            Klassen-Analyse
+          </span>
+          <span class="text-xs font-bold text-gray-400">{{ students.length }} Schüler</span>
+        </button>
       </div>
 
-      <!-- Content -->
-      <div class="space-y-6">
-        <!-- Empty State -->
-        <div v-if="filteredExcuses.length === 0" class="bg-white rounded-xl px-8 py-12 text-center shadow-sm border border-gray-200">
-          <div class="text-4xl mb-4">📋</div>
-          <h2 class="text-2xl font-bold text-gray-900">Keine Einträge</h2>
-          <p class="text-gray-500 mt-2">Es wurden keine Entschuldigungen gefunden.</p>
+      <!-- Student List -->
+      <div class="flex-1 overflow-y-auto w-full">
+        <div v-if="loadingStudents" class="flex p-8 justify-center">
+          <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
         </div>
-
-        <!-- Table -->
-        <div v-else class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <table class="w-full">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Schüler</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Klasse</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Datum</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Grund</th>
-                <th class="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wide">Status</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr
-                v-for="item in filteredExcuses"
-                :key="item.id"
-                @click="openEditor(item)"
-                class="hover:bg-blue-50/50 transition cursor-pointer"
-              >
-                <td class="px-6 py-4 font-bold text-gray-900">{{ item.name }}</td>
-                <td class="px-6 py-4">
-                  <span class="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">{{ item.class }}</span>
-                </td>
-                <td class="px-6 py-4 text-sm text-gray-700">{{ item.date }}</td>
-                <td class="px-6 py-4">
-                  <span class="text-xs text-gray-600 bg-gray-50 px-3 py-1 rounded border border-gray-200">
-                    {{ item.reason }}
-                  </span>
-                </td>
-                <td class="px-6 py-4 text-center">
-                  <div v-if="item.status === 'confirmed'" class="text-green-600 text-xs font-bold flex items-center justify-center gap-1">
-                    <div class="w-2 h-2 rounded-full bg-green-600"></div>
-                    Bestätigt
-                  </div>
-                  <div v-else class="text-orange-600 text-xs font-bold flex items-center justify-center gap-1">
-                    <div class="w-2 h-2 rounded-full bg-orange-600 animate-pulse"></div>
-                    Ausstehend
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-else-if="students.length === 0" class="p-8 text-center text-sm text-gray-400">
+          Keine Schüler
         </div>
-
-        <!-- Footer Buttons -->
-        <div class="flex justify-between gap-4 pt-4">
-          <button
-            class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-6 py-3 rounded-lg font-bold uppercase text-sm transition"
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal -->
-    <div v-if="activeEntry" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <!-- Modal Header -->
-        <div class="bg-gray-900 text-white p-6">
-          <div class="flex justify-between items-start">
-            <div>
-              <h3 class="text-xl font-bold uppercase tracking-tight">Status bearbeiten</h3>
-              <p class="text-blue-400 font-semibold mt-2">{{ activeEntry.name }}</p>
-            </div>
-            <span class="text-xs px-3 py-1 bg-white/20 rounded-full font-bold uppercase tracking-widest">{{ activeEntry.class }}</span>
-          </div>
-        </div>
-
-        <!-- Modal Body -->
-        <div class="p-6 space-y-6">
-          <!-- Status Selection -->
-          <div>
-            <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-3">Neuer Status</label>
-            <div class="grid grid-cols-2 gap-3">
-              <button
-                @click="statusDraft = 'confirmed'; reasonDraft = reasonsConfirmed[0] ?? 'Sonstiges'"
-                :class="[
-                  'py-3 px-4 rounded-lg font-bold uppercase text-xs transition',
-                  statusDraft === 'confirmed'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                ]"
-              >
-                Entschuldigt
-              </button>
-              <button
-                @click="statusDraft = 'pending'; reasonDraft = reasonsPending[0] ?? 'Sonstiges'"
-                :class="[
-                  'py-3 px-4 rounded-lg font-bold uppercase text-xs transition',
-                  statusDraft === 'pending'
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                ]"
-              >
-                Nicht Entschuldigt
-              </button>
-            </div>
-          </div>
-
-          <!-- Reason Selection -->
-          <div>
-            <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-3">Grund</label>
-            <select
-              v-model="reasonDraft"
-              class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        <ul v-else class="divide-y divide-gray-100">
+          <li v-for="student in students" :key="student.untisId">
+            <button
+              @click="selectStudent(student)"
+              :class="[
+                'w-full flex items-center px-6 py-3 text-left transition-colors outline-none',
+                selectedStudent?.untisId === student.untisId
+                  ? 'bg-primary/10 border-r-4 border-primary'
+                  : 'hover:bg-gray-50 border-r-4 border-transparent'
+              ]"
             >
-              <template v-if="statusDraft === 'confirmed'">
-                <option v-for="r in reasonsConfirmed" :key="r" :value="r">{{ r }}</option>
-              </template>
-              <template v-else>
-                <option v-for="r in reasonsPending" :key="r" :value="r">{{ r }}</option>
-              </template>
-            </select>
+              <div class="flex-1 min-w-0">
+                <p :class="['text-sm font-semibold truncate', selectedStudent?.untisId === student.untisId ? 'text-primary' : 'text-gray-900']">
+                  {{ student.lastName }}, {{ student.firstName }}
+                </p>
+              </div>
+              <!-- Behavior indicator: unexcused hours + grade color dot -->
+              <div v-if="behaviorMap.has(student.untisId)" class="flex items-center gap-1 ml-2 flex-shrink-0">
+                <span
+                  class="text-[11px] font-bold tabular-nums"
+                  :style="{ color: behaviorGrade(behaviorMap.get(student.untisId)!.notExcusedHours).color }"
+                  :title="`${behaviorGrade(behaviorMap.get(student.untisId)!.notExcusedHours).label} · ${behaviorMap.get(student.untisId)!.notExcusedHours} nicht entschuldigte EH`"
+                >{{ behaviorMap.get(student.untisId)!.notExcusedHours }}</span>
+                <span
+                  class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  :style="{ background: behaviorGrade(behaviorMap.get(student.untisId)!.notExcusedHours).color }"
+                ></span>
+              </div>
+              <svg class="h-4 w-4 text-gray-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="selectedStudent?.untisId === student.untisId">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Sidebar Footer (Logout) -->
+      <div class="p-4 border-t border-gray-200 bg-white">
+        <div class="flex items-center mb-3 px-2">
+          <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 mr-3 flex-shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          </div>
+          <div class="text-sm font-semibold text-gray-700 truncate">{{ teacherName }}</div>
+        </div>
+        <button @click="logout" class="w-full flex items-center justify-center space-x-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 px-4 py-2 rounded border border-gray-200 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+          <span>Abmelden</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full bg-[#f4f5f7] overflow-hidden">
+      <!-- Top navbar -->
+      <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 flex-shrink-0 shadow-sm">
+        <div class="flex items-center text-sm text-gray-500">
+          <span>Lehrer-Dashboard</span>
+          <span class="mx-2 text-gray-300">/</span>
+          <span v-if="selectedStudent" class="font-semibold text-gray-900">
+            {{ selectedStudent.firstName }} {{ selectedStudent.lastName }}
+          </span>
+          <span v-else-if="showClassAnalytics" class="font-semibold text-gray-900">
+            Klassenanalyse
+          </span>
+          <span v-else>Bitte Schüler auswählen</span>
+        </div>
+        <div v-if="error" class="text-sm font-semibold text-red-600 truncate max-w-xs">{{ error }}</div>
+      </header>
+
+      <!-- Scrollable content -->
+      <div class="flex-1 p-8 flex flex-col min-h-0 relative">
+
+        <!-- ── Class Analytics ─────────────────────────────────────────── -->
+        <div v-if="showClassAnalytics" class="flex-grow flex flex-col min-h-0 w-full">
+          <div class="flex items-center justify-between mb-6 flex-shrink-0 flex-wrap gap-3">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-900">Klassenanalyse</h2>
+              <p class="text-sm text-gray-500 mt-0.5">
+                Basierend auf {{ students.length }} eingeloggten Schüler{{ students.length !== 1 ? 'n' : '' }}
+              </p>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-wide text-primary bg-primary/10 px-3 py-1.5 rounded border border-primary/20">
+              Alle Absenzen
+            </span>
           </div>
 
-          <!-- Custom Reason -->
-          <div v-if="reasonDraft === 'Sonstiges' || statusDraft === 'pending'">
-            <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-3">Begründung</label>
-            <textarea
-              v-model="customReasonDraft"
-              class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm h-24"
-              placeholder="z.B. 15 Minuten zu spät gekommen..."
-            ></textarea>
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+            <!-- Zeitraum filter (applies to the whole analysis below) -->
+            <div class="px-6 py-3 bg-white border-b border-gray-200 flex items-center gap-3 flex-wrap text-sm flex-shrink-0">
+              <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
+              <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
+                <input type="date" v-model="classFrom" :max="classTo || undefined" @change="fetchClassAnalytics"
+                  class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+              <span class="text-gray-400">–</span>
+              <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
+                <input type="date" v-model="classTo" :min="classFrom || undefined" @change="fetchClassAnalytics"
+                  class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+              <button v-if="classFrom || classTo" @click="clearClassRange"
+                class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
+            </div>
+
+            <div v-if="loadingClassAnalytics" class="p-12 flex-grow flex items-center justify-center">
+              <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+            </div>
+            <div v-else-if="classAnalytics.stats.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center text-center">
+              <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              </div>
+              <p class="text-gray-500 text-sm font-medium">Noch keine Absenzen für diese Klasse erfasst.</p>
+            </div>
+            <div v-else class="flex-grow overflow-y-auto min-h-0 p-6">
+
+              <!-- Heatmap + Pie -->
+              <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                <div class="border border-gray-200 rounded-lg p-4">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Stundenplan-Heatmap</h3>
+                  <TimetableHeatmap :cells="classAnalytics.heatmap" />
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Versäumte Stunden nach Fach</h3>
+                  <VueApexCharts type="pie" height="320" :options="{ ...pieOptions, labels: classPie.labels }" :series="classPie.series" />
+                </div>
+              </div>
+
+              <!-- Fach-Übersicht -->
+              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Fach-Übersicht</h3>
+              <table class="w-full text-sm text-left border-collapse mb-8">
+                <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                  <tr>
+                    <th class="px-6 py-3 font-semibold">Fach</th>
+                    <th class="px-6 py-3 font-semibold">Bezeichnung</th>
+                    <th class="px-6 py-3 font-semibold text-right">Versäumt</th>
+                    <th class="px-6 py-3 font-semibold text-right">Gesamt</th>
+                    <th class="px-6 py-3 font-semibold text-right">%</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="s in classAnalytics.stats" :key="s.subjectName" class="hover:bg-gray-50/50">
+                    <td class="px-6 py-3">
+                      <span
+                        class="inline-flex items-center px-2.5 py-0.5 rounded font-bold text-white text-xs"
+                        :style="{ background: subjectColor(s.subjectName) }"
+                      >{{ s.subjectName }}</span>
+                    </td>
+                    <td class="px-6 py-3 text-gray-600">{{ s.subjectLongName || '—' }}</td>
+                    <td class="px-6 py-3 text-right">
+                      <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', severityClass(s.missedLessons)]">{{ s.missedLessons }}</span>
+                    </td>
+                    <td class="px-6 py-3 text-right text-gray-500">{{ s.totalLessons ?? '—' }}</td>
+                    <td class="px-6 py-3 text-right">
+                      <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', percentageClass(s.percentage)]">{{ s.percentage !== null ? s.percentage + '%' : '—' }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <!-- Top-3 per student -->
+              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top-3 Fächer pro Schüler</h3>
+              <table class="w-full text-sm text-left border-collapse">
+                <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                  <tr>
+                    <th class="px-6 py-3 font-semibold">Schüler</th>
+                    <th class="px-6 py-3 font-semibold">Platz 1</th>
+                    <th class="px-6 py-3 font-semibold">Platz 2</th>
+                    <th class="px-6 py-3 font-semibold">Platz 3</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="row in classAnalytics.studentTable" :key="row.untisId" class="hover:bg-gray-50/50">
+                    <td class="px-6 py-3 font-semibold text-gray-900">{{ row.lastName }}, {{ row.firstName }}</td>
+                    <td v-for="i in 3" :key="i" class="px-6 py-3">
+                      <template v-if="row.top3[i - 1]">
+                        <span class="inline-flex items-center gap-1.5">
+                          <span
+                            class="inline-flex items-center px-2 py-0.5 rounded font-bold text-white text-xs"
+                            :style="{ background: subjectColor(row.top3[i - 1]!.subjectName) }"
+                          >{{ row.top3[i - 1]!.subjectName }}</span>
+                          <span class="text-gray-400 text-xs">{{ row.top3[i - 1]!.percentage !== null ? row.top3[i - 1]!.percentage + '%' : row.top3[i - 1]!.missedLessons + '×' }}</span>
+                        </span>
+                      </template>
+                      <span v-else class="text-gray-300">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <!-- Modal Footer -->
-        <div class="p-6 bg-gray-50 border-t border-gray-200 flex gap-3">
-          <button @click="activeEntry = null" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-3 rounded-lg font-bold uppercase text-xs transition">
-            Abbrechen
+        <!-- ── No selection ────────────────────────────────────────────── -->
+        <div v-else-if="!selectedStudent" class="flex-grow flex flex-col items-center justify-center opacity-50">
+          <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <p class="text-gray-500 text-lg">Wählen Sie einen Schüler links aus</p>
+        </div>
+
+        <!-- ── Student selected ────────────────────────────────────────── -->
+        <div v-else class="flex-grow flex flex-col min-h-0 w-full">
+          <!-- Toolbar -->
+          <div class="flex items-center justify-between mb-6 flex-shrink-0 flex-wrap gap-3">
+            <h2 class="text-2xl font-bold text-gray-900">
+              {{ showAnalytics ? 'Analyse' : listTab === 'open' ? 'Offene Fehlstunden' : listTab === 'pending' ? 'Abgeschickte Entschuldigungen' : 'Unterschriebene Entschuldigungen' }}
+            </h2>
+            <div class="flex items-center gap-3 flex-wrap">
+              <!-- Open/All toggle (analytics only) -->
+              <div v-if="showAnalytics" class="flex space-x-2 bg-white rounded-md border border-gray-200 p-1 shadow-sm">
+                <button @click="setAnalyticsMode('open')" :class="['px-4 py-1.5 text-sm font-semibold rounded cursor-pointer transition-colors', analyticsMode === 'open' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']">Offen</button>
+                <button @click="setAnalyticsMode('all')" :class="['px-4 py-1.5 text-sm font-semibold rounded cursor-pointer transition-colors', analyticsMode === 'all' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']">Alle</button>
+              </div>
+              <!-- Liste/Analyse toggle -->
+              <div class="flex space-x-2 bg-white rounded-md border border-gray-200 p-1 shadow-sm">
+                <button @click="showAnalytics = false" :class="['px-4 py-1.5 text-sm font-semibold rounded cursor-pointer transition-colors', !showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']">Liste</button>
+                <button @click="toggleAnalytics" :class="['px-4 py-1.5 text-sm font-semibold rounded cursor-pointer transition-colors', showAnalytics ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700']">Analyse</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shared date-range filter — applies to both Liste stats and Analyse -->
+          <div class="flex items-center gap-3 flex-wrap text-sm mb-2">
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
+            <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
+              <input type="date" v-model="analyticsFrom" :max="analyticsTo || undefined" @change="onRangeChange"
+                class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+            <span class="text-gray-400">–</span>
+            <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
+              <input type="date" v-model="analyticsTo" :min="analyticsFrom || undefined" @change="onRangeChange"
+                class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
+            <button v-if="analyticsFrom || analyticsTo" @click="clearAnalyticsRange"
+              class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
+          </div>
+
+          <!-- Content card -->
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+            <!-- Analytics -->
+            <div v-if="showAnalytics" class="flex-1 flex flex-col min-h-0">
+              <!-- Summary Bar (Total Hours + Behavior Grade) — all values respect the active date filter -->
+              <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm flex-wrap">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Gesamte Fehlstunden:</span>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-primary/10 text-primary border border-primary/20">
+                    {{ analytics.totalHours }} EH
+                  </span>
+                </div>
+                <div class="h-4 w-px bg-gray-200"></div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Offene Fehlstunden:</span>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                    {{ analytics.unexcusedHours }} EH
+                  </span>
+                </div>
+                <div class="h-4 w-px bg-gray-200"></div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Nicht entschuldigt:</span>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                    {{ analytics.notExcusedHours }} EH
+                  </span>
+                </div>
+                <div class="h-4 w-px bg-gray-200"></div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Verhaltensnote:</span>
+                  <span
+                    :class="['inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-semibold border text-xs',
+                      behaviorGrade(analytics.notExcusedHours).bgClass,
+                      behaviorGrade(analytics.notExcusedHours).textClass,
+                      behaviorGrade(analytics.notExcusedHours).borderClass]"
+                  >
+                    <span class="w-2 h-2 rounded-full flex-shrink-0"
+                      :style="{ background: behaviorGrade(analytics.notExcusedHours).color }"
+                    ></span>
+                    {{ behaviorGrade(analytics.notExcusedHours).label }}
+                  </span>
+                </div>
+              </div>
+
+              <div v-if="loadingAnalytics" class="p-12 flex-grow flex items-center justify-center bg-white">
+                <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+              </div>
+              <div v-else-if="analytics.stats.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center text-center">
+                <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                  <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <p class="text-gray-500 text-sm font-medium">Keine Fehlstunden in der Analyse vorhanden.</p>
+              </div>
+              <div v-else class="flex-grow overflow-y-auto min-h-0 p-6">
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                  <div class="border border-gray-200 rounded-lg p-4">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Stundenplan-Heatmap</h3>
+                    <TimetableHeatmap :cells="analytics.heatmap" />
+                  </div>
+                  <div class="border border-gray-200 rounded-lg p-4">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Versäumte Stunden nach Fach</h3>
+                    <VueApexCharts type="pie" height="320" :options="{ ...pieOptions, labels: studentPie.labels }" :series="studentPie.series" />
+                  </div>
+                </div>
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Fach-Detail</h3>
+                <table class="w-full text-sm text-left border-collapse">
+                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                    <tr>
+                      <th class="px-6 py-3 font-semibold">Fach</th>
+                      <th class="px-6 py-3 font-semibold">Bezeichnung</th>
+                      <th class="px-6 py-3 font-semibold text-right">Versäumt</th>
+                      <th class="px-6 py-3 font-semibold text-right">Gesamt</th>
+                      <th class="px-6 py-3 font-semibold text-right">%</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="s in analytics.stats" :key="s.subjectName" class="hover:bg-gray-50/50">
+                      <td class="px-6 py-3">
+                        <span
+                          class="inline-flex items-center px-2.5 py-0.5 rounded font-bold text-white text-xs"
+                          :style="{ background: subjectColor(s.subjectName) }"
+                        >{{ s.subjectName }}</span>
+                      </td>
+                      <td class="px-6 py-3 text-gray-600">{{ s.subjectLongName || '—' }}</td>
+                      <td class="px-6 py-3 text-right"><span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', severityClass(s.missedLessons)]">{{ s.missedLessons }}</span></td>
+                      <td class="px-6 py-3 text-right text-gray-500">{{ s.totalLessons ?? '—' }}</td>
+                      <td class="px-6 py-3 text-right"><span :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold', percentageClass(s.percentage)]">{{ s.percentage !== null ? s.percentage + '%' : '—' }}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- List -->
+            <div v-else class="flex-1 flex flex-col min-h-0 bg-slate-50">
+              <!-- List Tab Bar -->
+              <div class="px-6 py-2 bg-white border-b border-gray-200 flex items-center gap-1 flex-shrink-0">
+                <button
+                  @click="listTab = 'signed'"
+                  :class="['flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-colors',
+                    listTab === 'signed' ? 'bg-green-50 text-green-700 border border-green-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50']"
+                >
+                  Unterschrieben
+                  <span :class="['text-xs font-bold px-1.5 py-0.5 rounded-full', listTab === 'signed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500']">{{ signedAbsences.length }}</span>
+                </button>
+                <button
+                  @click="listTab = 'open'"
+                  :class="['flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-colors',
+                    listTab === 'open' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50']"
+                >
+                  Offen
+                  <span :class="['text-xs font-bold px-1.5 py-0.5 rounded-full', listTab === 'open' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500']">{{ openAbsences.length }}</span>
+                </button>
+                <button
+                  @click="listTab = 'pending'"
+                  :class="['flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-semibold transition-colors',
+                    listTab === 'pending' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50']"
+                >
+                  Abgeschickt
+                  <span :class="['text-xs font-bold px-1.5 py-0.5 rounded-full', listTab === 'pending' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500']">{{ pendingAbsences.length }}</span>
+                </button>
+              </div>
+
+              <div v-if="loadingAbsences" class="p-12 flex-grow flex items-center justify-center bg-white">
+                <div class="w-6 h-6 border-2 border-gray-200 border-t-primary rounded-full animate-spin"></div>
+              </div>
+              <div v-else class="flex-grow flex flex-col min-h-0">
+                <!-- Summary Bar (Total Hours) -->
+                <div class="px-6 py-3 bg-slate-50 border-b border-gray-200 flex items-center gap-6 flex-shrink-0 text-sm flex-wrap">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Gesamte Fehlstunden:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-primary/10 text-primary border border-primary/20">
+                      {{ totalHours }} EH
+                    </span>
+                  </div>
+                  <div class="h-4 w-px bg-gray-200"></div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Offene Fehlstunden:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                      {{ unexcusedHours }} EH
+                    </span>
+                  </div>
+                  <div class="h-4 w-px bg-gray-200"></div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Nicht entschuldigt:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-md font-semibold bg-red-100 text-red-700 border border-red-200">
+                      {{ notExcusedHours }} EH
+                    </span>
+                  </div>
+                </div>
+
+                <div v-if="activeAbsences.length === 0" class="p-12 flex-grow flex flex-col items-center justify-center bg-white">
+                  <div class="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  </div>
+                  <p class="text-gray-500 text-sm font-medium">
+                    {{ listTab === 'open' ? 'Keine offenen Fehlstunden.' : listTab === 'pending' ? 'Keine abgeschickten Entschuldigungen.' : 'Alle Absenzen wurden bearbeitet.' }}
+                  </p>
+                </div>
+                <div v-else class="flex-grow overflow-y-auto min-h-0 bg-white">
+
+                  <!-- Signed absences -->
+                  <!-- Signed absences -->
+                  <table v-if="listTab === 'signed'" class="w-full text-sm text-left border-collapse">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold">Datum</th>
+                        <th class="px-6 py-3 font-semibold">Von</th>
+                        <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold text-center">Anhang</th>
+                        <th class="px-6 py-3 font-semibold text-center">Status</th>
+                        <th class="px-6 py-3 font-semibold text-right">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-center">
+                          <span v-if="absence.attachmentCount > 0" class="inline-flex items-center gap-1 text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded" :title="`${absence.attachmentCount} Anhang/Anhänge`">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                            {{ absence.attachmentCount }}
+                          </span>
+                          <span v-else class="text-gray-300 text-xs">—</span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                          <span class="inline-flex items-center gap-1.5 text-green-700 bg-green-50 px-2 py-0.5 rounded text-xs font-semibold border border-green-200">Unterschrieben</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                          <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">Ansehen</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <!-- Open absences (no excuse submitted) -->
+                  <table v-else-if="listTab === 'open'" class="w-full text-sm text-left border-collapse">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold">Datum</th>
+                        <th class="px-6 py-3 font-semibold">Von</th>
+                        <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-center">
+                          <span class="inline-flex items-center gap-1.5 text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded text-xs font-semibold border border-yellow-200">Keine Entschuldigung</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <!-- Pending absences (excuse submitted by student, awaiting parent signature) -->
+                  <table v-else class="w-full text-sm text-left border-collapse">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-600 sticky top-0 z-10">
+                      <tr>
+                        <th class="px-6 py-3 font-semibold">Datum</th>
+                        <th class="px-6 py-3 font-semibold">Von</th>
+                        <th class="px-6 py-3 font-semibold">Bis</th>
+                        <th class="px-6 py-3 font-semibold">Begründung</th>
+                        <th class="px-6 py-3 font-semibold text-center">Anhang</th>
+                        <th class="px-6 py-3 font-semibold text-center">Status</th>
+                        <th class="px-6 py-3 font-semibold text-right">Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white">
+                      <tr v-for="absence in activeAbsences" :key="absence.id" class="hover:bg-gray-50/50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ formatDate(absence.date) }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.startTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600">{{ formatTime(absence.endTime) }} Uhr</td>
+                        <td class="px-6 py-4 text-gray-600 max-w-xs truncate">{{ absence.excuseMessage || '—' }}</td>
+                        <td class="px-6 py-4 text-center">
+                          <span v-if="absence.attachmentCount > 0" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded" :title="`${absence.attachmentCount} Anhang/Anhänge`">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                            {{ absence.attachmentCount }}
+                          </span>
+                          <span v-else class="text-gray-300 text-xs">—</span>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                          <span class="inline-flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs font-semibold border border-blue-200">Wartet auf Unterschrift</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                          <button @click="viewAttachments(absence)" class="text-primary hover:text-orange-700 font-semibold cursor-pointer underline-offset-2 hover:underline">Ansehen</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Details Modal -->
+    <div v-if="showAttachmentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4" @click.self="closeAttachmentModal">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-xl flex flex-col max-h-[90vh] border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50 rounded-t-lg">
+          <h3 class="font-bold text-gray-900">Details</h3>
+          <button @click="closeAttachmentModal" class="text-gray-400 hover:text-gray-900 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
-          <button @click="saveChanges" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-bold uppercase text-xs transition">
-            Speichern
+        </div>
+
+        <div class="p-6 overflow-y-auto flex-1">
+          <div class="mb-6">
+            <label class="block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2">Begründung</label>
+            <div class="bg-gray-50 p-4 rounded border border-gray-200 text-sm text-gray-800 break-words whitespace-pre-wrap">
+              {{ activeExcuseMessage || 'Keine Begründung eingegeben' }}
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold tracking-wider text-gray-500 uppercase mb-2">Anhänge</label>
+            <div v-if="loadingAttachments" class="text-sm text-gray-500">Laden...</div>
+            <div v-else-if="activeAttachments.length === 0" class="text-sm text-gray-400 italic">Keine Anhänge</div>
+            <div v-else class="space-y-4">
+              <div v-for="(file, i) in activeAttachments" :key="i" class="border border-gray-200 rounded overflow-hidden">
+                <div class="bg-gray-50 px-3 py-2 border-b border-gray-200 text-xs font-semibold text-gray-600">{{ file.fileName }}</div>
+                <div class="p-2">
+                  <img v-if="file.fileData.startsWith('data:image')" :src="file.fileData" class="w-full h-auto mx-auto object-contain max-h-64" alt="Anhang" />
+                  <iframe v-else-if="file.fileData.startsWith('data:application/pdf')" :src="file.fileData" class="w-full h-64 border-0"></iframe>
+                  <div v-else class="p-4 text-sm text-gray-500 text-center">Format wird nicht unterstützt.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50/50 rounded-b-lg flex justify-end">
+          <button @click="closeAttachmentModal" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded text-sm font-semibold transition-colors shadow-sm">
+            Schließen
           </button>
         </div>
       </div>
     </div>
+
   </div>
 </template>
-

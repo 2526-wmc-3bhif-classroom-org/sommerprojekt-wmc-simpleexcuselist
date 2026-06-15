@@ -58,3 +58,10 @@ const filteredAbsences = absences.filter((a: any) => {
 - **Express (Node.js):** Backend proxy server.
 - **WebUntis (NPM):** Library used to interact with the WebUntis JSON-RPC API.
 - **JSON Web Tokens (JWT):** Securely passing session information between frontend and backend.
+
+i want to deploy this web app to a proxmox container in my school private network so its accassible for people in my class.
+For deployment i was thinking to install nginx in the container to serve the files and dockerize my app and run one instance of the app and connect the ports and maybe even switch to postgressql and make another container for db so i have two (app and db) and then i can use docker composevto start both.
+I want you to read through the entire code and look for security issues (there are probably many).
+other students will try to find a way to bypass the security issues and break it or get data they are not suppposed to.
+So think like a hacker and tell me what issues need to be fixed. USer date protection,url, authetication,ddos,...
+Furthermore, if you have any general tips for deployment for this case, please let me know.

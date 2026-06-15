@@ -12,12 +12,18 @@ function getUserRoleFromToken(token: string): string | null {
     const base64Url = parts[1];
     if (!base64Url) return null;
 
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padLength = (4 - (base64Url.length % 4)) % 4;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLength);
     const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
 
     const decoded = JSON.parse(jsonPayload);
+
+    if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+      return null; // token expired
+    }
+
     return decoded.role || null;
   } catch (e) {
     return null;

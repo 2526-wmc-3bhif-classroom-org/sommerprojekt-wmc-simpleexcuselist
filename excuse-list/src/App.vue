@@ -1,13 +1,17 @@
 <script setup>
-import Navbar from "./components/Navbar.vue"
 import { RouterView } from "vue-router"
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
-    <Navbar />
-    <main class="flex-1">
-      <RouterView />
-    </main>
+  <div class="min-h-screen w-full bg-[#f4f5f7] text-gray-800 font-sans flex flex-col">
+    <RouterView />
   </div>
 </template>
+
+<style>
+/* Global resets */
+body {
+  margin: 0;
+  padding: 0;
+}
+</style>

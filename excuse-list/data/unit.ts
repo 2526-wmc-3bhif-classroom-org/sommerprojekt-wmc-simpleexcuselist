@@ -66,7 +66,6 @@ export class DB {
   public static createDBConnection(): Database {
     const db = new BetterSqlite3(dbFileName, {
       fileMustExist: false,
-      verbose: (s: unknown) => DB.logStatement(s)
     });
     db.pragma("foreign_keys = ON");
 
@@ -87,18 +86,6 @@ export class DB {
     connection.exec("rollback;");
   }
 
-  private static logStatement(statement: string | unknown): void {
-    if (typeof statement !== "string") {
-      return;
-    }
-    const start = statement.slice(0, 6).trim().toLowerCase();
-    // Avoid using startsWith for compatibility with older TS lib settings
-    if (start.indexOf("pragma") === 0 || start.indexOf("create") === 0) {
-      return;
-    }
-    console.log(`SQL: ${statement}`);
-  }
-
   private static ensureTablesCreated(connection: Database): void {
     const studentColumns = DB.getTableColumns(connection, "Student");
     const absenceColumns = DB.getTableColumns(connection, "Absence");
@@ -112,11 +99,71 @@ export class DB {
     }
 
     DB.createCurrentSchema(connection);
+    DB.runMigrations(connection);
+  }
+
+  private static runMigrations(connection: Database): void {
+    const absenceLessonColumns = DB.getTableColumns(connection, "AbsenceLesson");
+    if (!absenceLessonColumns.includes("absenceStatus")) {
+      connection.exec(`ALTER TABLE AbsenceLesson ADD COLUMN absenceStatus TEXT NOT NULL DEFAULT 'open'`);
+      connection.exec(`CREATE INDEX IF NOT EXISTS idx_absencelesson_status ON AbsenceLesson(absenceStatus)`);
+    }
+
+    const parentColumns = DB.getTableColumns(connection, "Parent");
+    if (!parentColumns.includes("plainPassword")) {
+      connection.exec(`ALTER TABLE Parent ADD COLUMN plainPassword TEXT`);
+    }
+
+    const absenceColumns = DB.getTableColumns(connection, "Absence");
+    if (!absenceColumns.includes("excuseParentId")) {
+      connection.exec(`ALTER TABLE Absence ADD COLUMN excuseParentId TEXT`);
+    }
+    if (!absenceColumns.includes("excuseMessage")) {
+      connection.exec(`ALTER TABLE Absence ADD COLUMN excuseMessage TEXT`);
+    }
+
+    // Drop superseded analytics tables: the per-student ScheduledLesson and the
+    // aggregate ClassLessonTotal were replaced by the shared, incrementally
+    // synced ClassScheduledLesson + ClassSyncState.
+    connection.exec(`DROP TABLE IF EXISTS ScheduledLesson`);
+    connection.exec(`DROP TABLE IF EXISTS ClassLessonTotal`);
+
+    // Migrate from shared ClassScheduledLesson to per-student StudentScheduledLesson
+    connection.exec(`
+      CREATE TABLE IF NOT EXISTS StudentScheduledLesson
+      (
+        id              TEXT PRIMARY KEY,
+        studentUntisId  INTEGER NOT NULL,
+        date            INTEGER NOT NULL,
+        startTime       INTEGER NOT NULL,
+        endTime         INTEGER NOT NULL,
+        subjectName     TEXT NOT NULL,
+        subjectLongName TEXT NOT NULL DEFAULT '',
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS StudentSyncState
+      (
+        studentUntisId INTEGER PRIMARY KEY,
+        lastSynced     INTEGER NOT NULL,
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_subject ON StudentScheduledLesson(studentUntisId, subjectName, date);
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_date ON StudentScheduledLesson(studentUntisId, date);
+
+      DROP TABLE IF EXISTS ClassScheduledLesson;
+      DROP TABLE IF EXISTS ClassSyncState;
+    `);
   }
 
   private static rebuildDatabase(connection: Database): void {
     connection.pragma("foreign_keys = OFF");
     connection.exec(`
+      DROP TABLE IF EXISTS AbsenceLesson;
+      DROP TABLE IF EXISTS Attachment;
       DROP TABLE IF EXISTS Excuse;
       DROP TABLE IF EXISTS StudentParent;
       DROP TABLE IF EXISTS ClassTeacher;
@@ -145,11 +192,14 @@ export class DB {
 
       CREATE TABLE IF NOT EXISTS Parent
       (
-        id           TEXT PRIMARY KEY,
-        username     TEXT NOT NULL UNIQUE,
-        passwordHash TEXT NOT NULL,
-        name         TEXT NOT NULL,
-        createdAt    TEXT DEFAULT CURRENT_TIMESTAMP
+        id            TEXT PRIMARY KEY,
+        username      TEXT NOT NULL UNIQUE,
+        passwordHash  TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        -- DEV: plaintext of the generated password, kept for easy lookup so
+        -- testers can log into the auto-created parent account.
+        plainPassword TEXT,
+        createdAt     TEXT DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS StudentParent
@@ -173,24 +223,34 @@ export class DB {
         endTime        INTEGER NOT NULL,
         isExcusedUntis INTEGER DEFAULT 0,
         status         TEXT NOT NULL DEFAULT 'open',
+        excuseParentId TEXT,
+        excuseMessage  TEXT,
         createdAt      TEXT DEFAULT CURRENT_TIMESTAMP,
         updatedAt      TEXT DEFAULT CURRENT_TIMESTAMP,
 
-        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE,
+        FOREIGN KEY (excuseParentId) REFERENCES Parent(id) ON DELETE SET NULL
       );
 
-      CREATE TABLE IF NOT EXISTS Excuse
+      CREATE TABLE IF NOT EXISTS Attachment
       (
         id        TEXT PRIMARY KEY,
         absenceId TEXT NOT NULL,
-        parentId  TEXT NOT NULL,
-        message   TEXT,
-        status    TEXT NOT NULL DEFAULT 'pending',
+        fileName  TEXT NOT NULL,
+        fileData  TEXT NOT NULL,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
 
-        FOREIGN KEY (absenceId) REFERENCES Absence(id) ON DELETE CASCADE,
-        FOREIGN KEY (parentId) REFERENCES Parent(id) ON DELETE CASCADE
+        FOREIGN KEY (absenceId) REFERENCES Absence(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS Teacher
+      (
+        id           TEXT PRIMARY KEY,
+        username     TEXT NOT NULL UNIQUE,
+        passwordHash TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        className    TEXT NOT NULL,
+        createdAt    TEXT DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS ClassTeacher
@@ -199,10 +259,49 @@ export class DB {
         teacherUntisId INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS AbsenceLesson
+      (
+        id              TEXT PRIMARY KEY,
+        studentUntisId  INTEGER NOT NULL,
+        untisLessonId   INTEGER NOT NULL,
+        date            INTEGER NOT NULL,
+        startTime       INTEGER NOT NULL,
+        endTime         INTEGER NOT NULL,
+        subjectName     TEXT NOT NULL,
+        subjectLongName TEXT NOT NULL DEFAULT '',
+        absenceStatus   TEXT NOT NULL DEFAULT 'open',
+        createdAt       TEXT DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS StudentScheduledLesson
+      (
+        id              TEXT PRIMARY KEY,
+        studentUntisId  INTEGER NOT NULL,
+        date            INTEGER NOT NULL,
+        startTime       INTEGER NOT NULL,
+        endTime         INTEGER NOT NULL,
+        subjectName     TEXT NOT NULL,
+        subjectLongName TEXT NOT NULL DEFAULT '',
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS StudentSyncState
+      (
+        studentUntisId INTEGER PRIMARY KEY,
+        lastSynced     INTEGER NOT NULL,
+
+        FOREIGN KEY (studentUntisId) REFERENCES Student(untisId) ON DELETE CASCADE
+      );
+
       CREATE INDEX IF NOT EXISTS idx_student_class ON Student(className);
+      CREATE INDEX IF NOT EXISTS idx_absencelesson_student ON AbsenceLesson(studentUntisId);
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_subject ON StudentScheduledLesson(studentUntisId, subjectName, date);
+      CREATE INDEX IF NOT EXISTS idx_studentscheduled_date ON StudentScheduledLesson(studentUntisId, date);
       CREATE INDEX IF NOT EXISTS idx_absence_student ON Absence(studentUntisId);
       CREATE INDEX IF NOT EXISTS idx_absence_status ON Absence(status);
-      CREATE INDEX IF NOT EXISTS idx_excuse_absence ON Excuse(absenceId);
       CREATE INDEX IF NOT EXISTS idx_studentparent_parent ON StudentParent(parentId);
     `);
   }
