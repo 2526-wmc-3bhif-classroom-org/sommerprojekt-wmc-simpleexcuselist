@@ -546,40 +546,6 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
             </div>
             <div v-else class="flex-grow overflow-y-auto min-h-0 p-6">
 
-              <!-- ── Verhaltensnoten-Übersicht ────────────────────────── -->
-              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Verhaltensnoten (nach nicht entschuldigten Fehlstunden)</h3>
-
-              <!-- Student behavior table -->
-              <table class="w-full text-sm text-left border-collapse mb-8">
-                <thead class="bg-gray-50 border-b border-gray-200 text-gray-600">
-                  <tr>
-                    <th class="px-4 py-2.5 font-semibold">Schüler</th>
-                    <th class="px-4 py-2.5 font-semibold text-right">Unentschuldigt</th>
-                    <th class="px-4 py-2.5 font-semibold text-right">Gesamt</th>
-                    <th class="px-4 py-2.5 font-semibold">Verhaltensnote</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                  <tr v-for="entry in sortedBehavior" :key="entry.untisId" class="hover:bg-gray-50/50">
-                    <td class="px-4 py-2.5 font-semibold text-gray-900">{{ entry.lastName }}, {{ entry.firstName }}</td>
-                    <td class="px-4 py-2.5 text-right">
-                      <span
-                        :class="['inline-flex items-center px-2.5 py-0.5 rounded-md font-bold text-sm', behaviorGrade(entry.unexcusedHours).bgClass, behaviorGrade(entry.unexcusedHours).textClass]"
-                      >{{ entry.unexcusedHours }} EH</span>
-                    </td>
-                    <td class="px-4 py-2.5 text-right text-gray-500 tabular-nums">{{ entry.totalHours }} EH</td>
-                    <td class="px-4 py-2.5">
-                      <span
-                        :class="['inline-flex items-center gap-1.5 px-2.5 py-1 rounded border font-semibold text-xs', behaviorGrade(entry.unexcusedHours).bgClass, behaviorGrade(entry.unexcusedHours).textClass, behaviorGrade(entry.unexcusedHours).borderClass]"
-                      >
-                        <span class="w-2 h-2 rounded-full flex-shrink-0" :style="{ background: behaviorGrade(entry.unexcusedHours).color }"></span>
-                        {{ behaviorGrade(entry.unexcusedHours).label }}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
               <!-- Heatmap + Pie -->
               <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
                 <div class="border border-gray-200 rounded-lg p-4">
