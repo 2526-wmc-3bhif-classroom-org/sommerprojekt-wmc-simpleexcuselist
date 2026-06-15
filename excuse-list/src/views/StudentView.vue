@@ -97,6 +97,7 @@ const logout = () => {
 };
 
 // Absences not yet excused in WebUntis — the ones still needing action.
+const totalAbsenceCount = computed(() => absences.value.length);
 const openAbsenceCount = computed(
   () => absences.value.filter((a) => !a.isExcusedUntis).length,
 );
@@ -313,12 +314,24 @@ const percentageClass = (p: number | null) => {
           </h2>
           <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
             <template v-if="!showAnalytics">
-              Du hast aktuell <span class="font-bold text-primary">{{ openAbsenceCount }}</span> offene Fehlstunde{{ openAbsenceCount === 1 ? '' : 'n' }}.
+              Stundenübersicht für dieses Schuljahr.
             </template>
             <template v-else>
               Stundenplan- und Fachstatistiken deiner Abwesenheiten.
             </template>
           </p>
+          <div v-if="!showAnalytics" class="flex items-center gap-3 mt-3 flex-wrap">
+            <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 shadow-sm">
+              <span class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Gesamt</span>
+              <span class="text-xl font-black text-slate-900 dark:text-white tabular-nums">{{ totalAbsenceCount }}</span>
+              <span class="text-xs text-slate-400">EH</span>
+            </div>
+            <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-orange-200 dark:border-orange-900/50 rounded-xl px-4 py-2 shadow-sm">
+              <span class="text-xs font-semibold text-orange-400 uppercase tracking-wider">Nicht entschuldigt</span>
+              <span class="text-xl font-black text-orange-500 dark:text-orange-400 tabular-nums">{{ openAbsenceCount }}</span>
+              <span class="text-xs text-orange-400">EH</span>
+            </div>
+          </div>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
           <!-- Open/All toggle (analytics only) -->
