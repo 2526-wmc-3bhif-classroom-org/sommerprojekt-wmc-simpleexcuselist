@@ -54,6 +54,21 @@ export async function seedMockTeacher() {
   }
 }
 
+export function getClassBehaviorSummary(className: string) {
+  const db = new Unit(true);
+  const rows = db.prepare(`
+    SELECT s.untisId, s.firstName, s.lastName,
+           COUNT(al.id) AS totalHours
+    FROM Student s
+    LEFT JOIN AbsenceLesson al ON al.studentUntisId = s.untisId
+    WHERE s.className = ?
+    GROUP BY s.untisId, s.firstName, s.lastName
+    ORDER BY s.lastName ASC, s.firstName ASC
+  `).all(className);
+  db.complete(null);
+  return rows;
+}
+
 export function getTeacherByClass(db: Unit, className: string) {
   return db.prepare(`SELECT id FROM Teacher WHERE className = ?`).get(className) as any;
 }

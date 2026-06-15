@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { Unit } from '../../data/unit';
 import { verifyJwt } from '../middleware/auth';
 import { requireTeacher } from '../middleware/roleGuard';
-import { getStudentsByClass, getStudentSignedAbsences } from '../data/teacherRepository';
+import { getStudentsByClass, getStudentSignedAbsences, getClassBehaviorSummary } from '../data/teacherRepository';
 
 import {
   getSubjectAbsenceStats,
@@ -87,6 +87,16 @@ router.get('/api/teacher/students/:studentId/analytics', verifyJwt, requireTeach
   } catch (error: any) {
     console.error('Error fetching student analytics:', error.message);
     res.status(500).json({ error: 'Error fetching analytics' });
+  }
+});
+
+router.get('/api/teacher/class/behavior', verifyJwt, requireTeacher, async (req, res) => {
+  try {
+    const data = getClassBehaviorSummary(req.user!.className!);
+    res.json(data);
+  } catch (error: any) {
+    console.error('Error fetching behavior summary:', error.message);
+    res.status(500).json({ error: 'Error fetching behavior summary' });
   }
 });
 
