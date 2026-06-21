@@ -33,9 +33,12 @@ router.get('/api/absences', verifyJwt, async (req, res) => {
       ? getStudentAbsenceSummary(studentId, student.className)
       : null;
     const totalCount = summary?.totalHours ?? 0;
-    const unexcusedCount = (summary?.unexcusedHours ?? 0) + (summary?.notExcusedHours ?? 0);
+    const missedDays = summary?.missedDays ?? 0;
+    const openCount = summary?.openHours ?? 0;
+    const excusedCount = summary?.excusedHours ?? 0;
+    const unexcusedCount = (summary?.notExcusedHours ?? 0);
 
-    res.json({ absences: open, totalCount, unexcusedCount });
+    res.json({ absences: open, totalCount, missedDays, openCount, excusedCount, unexcusedCount });
   } catch (error: any) {
     console.error('Error fetching absences:', error.message);
     res.status(500).json({ error: 'Error fetching absences' });
