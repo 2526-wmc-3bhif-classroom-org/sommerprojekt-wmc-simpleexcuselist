@@ -384,7 +384,7 @@ export function getStudentAbsenceSummary(
   studentUntisId: number,
   className: string,
   range: DateWindow | null = null,
-): { totalHours: number; unexcusedHours: number; notExcusedHours: number } | null {
+): { totalHours: number; missedDays: number; openHours: number; excusedHours: number; unexcusedHours: number; notExcusedHours: number } | null {
   const db = new Unit(true);
   const student = db.prepare(`SELECT untisId FROM Student WHERE untisId = ? AND className = ?`)
     .get(studentUntisId, className) as any;
@@ -393,6 +393,15 @@ export function getStudentAbsenceSummary(
   const dr = dateRangeClause(range);
   const totalRow = db.prepare(
     `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?${dr.sql}`,
+  ).get(studentUntisId, ...dr.params) as any;
+  const daysRow = db.prepare(
+    `SELECT COUNT(DISTINCT date) AS count FROM AbsenceLesson WHERE studentUntisId = ?${dr.sql}`,
+  ).get(studentUntisId, ...dr.params) as any;
+  const openRow = db.prepare(
+    `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')${dr.sql}`,
+  ).get(studentUntisId, ...dr.params) as any;
+  const excusedRow = db.prepare(
+    `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus = 'excused'${dr.sql}`,
   ).get(studentUntisId, ...dr.params) as any;
   const unexcusedRow = db.prepare(
     `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ? AND absenceStatus IN ('open', 'pending')${dr.sql}`,
@@ -404,6 +413,9 @@ export function getStudentAbsenceSummary(
   db.complete(null);
   return {
     totalHours: totalRow?.count ?? 0,
+    missedDays: daysRow?.count ?? 0,
+    openHours: openRow?.count ?? 0,
+    excusedHours: excusedRow?.count ?? 0,
     unexcusedHours: unexcusedRow?.count ?? 0,
     notExcusedHours: notExcusedRow?.count ?? 0,
   };

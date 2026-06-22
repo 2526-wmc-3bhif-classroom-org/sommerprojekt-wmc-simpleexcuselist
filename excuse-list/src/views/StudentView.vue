@@ -40,6 +40,9 @@ interface Absence {
 
 const absences = ref<Absence[]>([]);
 const totalCount = ref(0);
+const missedDays = ref(0);
+const openCount = ref(0);
+const excusedCount = ref(0);
 const unexcusedCount = ref(0);
 const loading = ref(true);
 const error = ref('');
@@ -87,6 +90,9 @@ const fetchAbsences = async (silent = false) => {
     const data = await response.json();
     absences.value = data.absences;
     totalCount.value = data.totalCount;
+    missedDays.value = data.missedDays;
+    openCount.value = data.openCount;
+    excusedCount.value = data.excusedCount;
     unexcusedCount.value = data.unexcusedCount;
   } catch (err: any) {
     if (!silent) error.value = err.message || 'An error occurred';
@@ -126,9 +132,6 @@ const logout = () => {
   router.push('/');
 };
 
-// Stat-card totals come from the Absence table (via the API), so they stay
-// correct after the student submits excuses — unlike absences.value, which
-// only holds the still-open list that drives the actionable view.
 const totalAbsenceCount = computed(() => totalCount.value);
 const openAbsenceCount = computed(() => unexcusedCount.value);
 
@@ -351,15 +354,40 @@ const percentageClass = (p: number | null) => {
             </template>
           </p>
           <div v-if="!showAnalytics" class="flex items-center gap-3 mt-3 flex-wrap">
-            <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 shadow-sm">
+            <!-- Gesamt -->
+            <div class="flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 shadow-sm min-w-[120px]">
               <span class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Gesamt</span>
-              <span class="text-xl font-black text-slate-900 dark:text-white tabular-nums">{{ totalAbsenceCount }}</span>
-              <span class="text-xs text-slate-400">EH</span>
+              <div class="flex items-baseline gap-1.5 mt-0.5">
+                <span class="text-xl font-black text-slate-900 dark:text-white tabular-nums">{{ totalAbsenceCount }}</span>
+                <span class="text-xs text-slate-400">EH</span>
+                <span class="text-xs text-slate-300 dark:text-slate-600 mx-0.5">/</span>
+                <span class="text-sm font-bold text-slate-600 dark:text-slate-300 tabular-nums">{{ missedDays }}</span>
+                <span class="text-xs text-slate-400">Tage</span>
+              </div>
             </div>
-            <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-orange-200 dark:border-orange-900/50 rounded-xl px-4 py-2 shadow-sm">
-              <span class="text-xs font-semibold text-orange-400 uppercase tracking-wider">Nicht entschuldigt</span>
-              <span class="text-xl font-black text-orange-500 dark:text-orange-400 tabular-nums">{{ openAbsenceCount }}</span>
-              <span class="text-xs text-orange-400">EH</span>
+            <!-- Davon offen -->
+            <div class="flex flex-col bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-900/50 rounded-xl px-4 py-2 shadow-sm min-w-[110px]">
+              <span class="text-xs font-semibold text-yellow-500 uppercase tracking-wider">Davon offen</span>
+              <div class="flex items-baseline gap-1.5 mt-0.5">
+                <span class="text-xl font-black text-yellow-500 dark:text-yellow-400 tabular-nums">{{ openCount }}</span>
+                <span class="text-xs text-yellow-400">EH</span>
+              </div>
+            </div>
+            <!-- Davon entschuldigt -->
+            <div class="flex flex-col bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl px-4 py-2 shadow-sm min-w-[110px]">
+              <span class="text-xs font-semibold text-emerald-500 uppercase tracking-wider">Davon entschuldigt</span>
+              <div class="flex items-baseline gap-1.5 mt-0.5">
+                <span class="text-xl font-black text-emerald-500 dark:text-emerald-400 tabular-nums">{{ excusedCount }}</span>
+                <span class="text-xs text-emerald-400">EH</span>
+              </div>
+            </div>
+            <!-- Davon nicht entschuldigt -->
+            <div class="flex flex-col bg-white dark:bg-slate-900 border border-orange-200 dark:border-orange-900/50 rounded-xl px-4 py-2 shadow-sm min-w-[110px]">
+              <span class="text-xs font-semibold text-orange-400 uppercase tracking-wider">Davon nicht entschuldigt</span>
+              <div class="flex items-baseline gap-1.5 mt-0.5">
+                <span class="text-xl font-black text-orange-500 dark:text-orange-400 tabular-nums">{{ openAbsenceCount }}</span>
+                <span class="text-xs text-orange-400">EH</span>
+              </div>
             </div>
           </div>
         </div>
@@ -514,40 +542,31 @@ const percentageClass = (p: number | null) => {
                 <span class="text-sm font-bold text-slate-900 dark:text-white">{{ formatDate(absence.date) }}</span>
                 <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ formatTime(absence.startTime) }} - {{ formatTime(absence.endTime) }} Uhr</span>
               </div>
-            </div>
-
-            <!-- Status & Button -->
-            <div class="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-0 border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-0">
+              <!-- Status badge sits with the info, not next to the action button -->
               <span
                 v-if="absence.isExcusedUntis"
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40"
-              >
-                Entschuldigt
-              </span>
+                class="ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40"
+              >Entschuldigt</span>
               <span
                 v-else-if="absence.status === 'unexcused'"
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200/50 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/40"
-              >
-                Nicht entschuldigt
-              </span>
+                class="ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200/50 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/40"
+              >Nicht entschuldigt</span>
               <span
                 v-else-if="absence.status === 'pending'"
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200/50 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/40"
-              >
-                Abgeschickt
-              </span>
+                class="ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200/50 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/40"
+              >Abgeschickt</span>
               <span
                 v-else-if="absence.status === 'signed'"
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-600 border border-violet-200/50 dark:bg-violet-950/20 dark:text-violet-400 dark:border-violet-900/40"
-              >
-                Unterschrieben
-              </span>
+                class="ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-600 border border-violet-200/50 dark:bg-violet-950/20 dark:text-violet-400 dark:border-violet-900/40"
+              >Unterschrieben</span>
               <span
                 v-else
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200/50 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-900/40"
-              >
-                Offen
-              </span>
+                class="ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-600 border border-orange-200/50 dark:bg-orange-950/20 dark:text-orange-400 dark:border-orange-900/40"
+              >Offen</span>
+            </div>
+
+            <!-- Action button only -->
+            <div class="flex items-center justify-end border-t sm:border-0 border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-0">
               <button
                 v-if="!absence.isExcusedUntis"
                 @click="openModal(absence)"
