@@ -1,5 +1,9 @@
-@import './base.css';
 @import "tailwindcss";
+/* Import the base reset INTO the `base` layer so its `* { margin: 0; font-weight: normal }`
+   reset loses to Tailwind's `utilities` layer. Unlayered, it would override every
+   margin/space-y/font-weight utility app-wide (utilities live in @layer utilities,
+   and unlayered author styles outrank any layer regardless of specificity). */
+@import './base.css' layer(base);
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 @plugin "daisyui";
 
