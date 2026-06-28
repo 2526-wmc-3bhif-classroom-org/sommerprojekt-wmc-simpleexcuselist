@@ -18,14 +18,20 @@ router.get('/api/absences', verifyJwt, async (req, res) => {
     const absences = getAbsencesByStudent(studentId);
     console.log(`Fetched ${absences.length} total absences`);
 
-    const open = absences.filter((a) => a.status === 'open');
-    console.log(`Filtered to ${open.length} open absences`);
+    // The actionable "Meine Fehlstunden" view shows absences the student can
+    // still do something about: 'open' (no excuse yet) and 'unexcused' (teacher
+    // refused — the student may resubmit). In-flight ones ('pending'/'signed')
+    // stay hidden until they resolve. The client buckets these into the
+    // "Offen" / "Nicht entschuldigt" tabs by status.
+    const actionable = absences.filter(
+      (a) => a.status === 'open' || a.status === 'unexcused',
+    );
+    console.log(`Filtered to ${actionable.length} actionable absences`);
 
-    // The open list drives the actionable "Meine Fehlstunden" view. The stat
-    // cards count lesson-hours (Einheiten) from AbsenceLesson — the full record
-    // that also keeps already-excused lessons, which the Absence table drops on
-    // sync. "Nicht entschuldigt" = everything not excused (open/pending +
-    // teacher-marked unexcused).
+    // The stat cards count lesson-hours (Einheiten) from AbsenceLesson — the
+    // full record that also keeps already-excused lessons, which the Absence
+    // table drops on sync. "Nicht entschuldigt" = everything not excused
+    // (open/pending + teacher-marked unexcused).
     const db = new Unit(true);
     const student = db.prepare(`SELECT className FROM Student WHERE untisId = ?`).get(studentId) as any;
     db.complete(null);
@@ -38,7 +44,7 @@ router.get('/api/absences', verifyJwt, async (req, res) => {
     const excusedCount = summary?.excusedHours ?? 0;
     const unexcusedCount = (summary?.notExcusedHours ?? 0);
 
-    res.json({ absences: open, totalCount, missedDays, openCount, excusedCount, unexcusedCount });
+    res.json({ absences: actionable, totalCount, missedDays, openCount, excusedCount, unexcusedCount });
   } catch (error: any) {
     console.error('Error fetching absences:', error.message);
     res.status(500).json({ error: 'Error fetching absences' });

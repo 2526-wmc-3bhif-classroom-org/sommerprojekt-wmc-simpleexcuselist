@@ -51,6 +51,10 @@ const router = useRouter();
 // --- Filter State ---
 const searchFilter = ref('');
 
+// Which bucket the list shows: 'open' (no excuse yet, submit) vs 'unexcused'
+// (teacher refused — student can resubmit a new excuse).
+const activeTab = ref<'open' | 'unexcused'>('open');
+
 // --- Modal/Drawer State ---
 const showModal = ref(false);
 const activeAbsence = ref<Absence | null>(null);
@@ -135,11 +139,16 @@ const logout = () => {
 const totalAbsenceCount = computed(() => totalCount.value);
 const openAbsenceCount = computed(() => unexcusedCount.value);
 
+// Row counts per tab (distinct from the lesson-hour stat cards above).
+const openTabCount = computed(() => absences.value.filter(a => a.status === 'open').length);
+const unexcusedTabCount = computed(() => absences.value.filter(a => a.status === 'unexcused').length);
+
 // --- Filtered Absences ---
 const filteredAbsences = computed(() => {
-  if (!searchFilter.value) return absences.value;
+  const list = absences.value.filter(a => a.status === activeTab.value);
+  if (!searchFilter.value) return list;
   const term = searchFilter.value.trim().toLowerCase();
-  return absences.value.filter(a => {
+  return list.filter(a => {
     const dateStr = formatDate(a.date);
     const timeStr = `${formatTime(a.startTime)} - ${formatTime(a.endTime)}`;
     return dateStr.toLowerCase().includes(term) || timeStr.toLowerCase().includes(term);
@@ -503,6 +512,24 @@ const percentageClass = (p: number | null) => {
             </div>
           </div>
 
+          <!-- View toggle: actionable ('Offen') vs. rejected ('Nicht entschuldigt') -->
+          <div class="flex gap-1 p-1 mb-6 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-900 w-full sm:w-fit">
+            <button
+              @click="activeTab = 'open'"
+              :class="activeTab === 'open' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+            >
+              Offen <span class="ml-1 opacity-70">{{ openTabCount }}</span>
+            </button>
+            <button
+              @click="activeTab = 'unexcused'"
+              :class="activeTab === 'unexcused' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+            >
+              Nicht entschuldigt <span class="ml-1 opacity-70">{{ unexcusedTabCount }}</span>
+            </button>
+          </div>
+
           <div v-if="loading" class="flex justify-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-900 transition-colors duration-300">
 
           <div class="w-7 h-7 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
@@ -520,9 +547,15 @@ const percentageClass = (p: number | null) => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 class="text-base font-bold text-slate-950 dark:text-white tracking-tight">Keine offenen Fehlstunden</h3>
+          <h3 class="text-base font-bold text-slate-950 dark:text-white tracking-tight">
+            {{ activeTab === 'unexcused' ? 'Keine nicht entschuldigten Fehlstunden' : 'Keine offenen Fehlstunden' }}
+          </h3>
           <p class="text-slate-500 dark:text-slate-400 text-xs mt-1.5 max-w-xs leading-relaxed">
-            Es wurden keine Fehlstunden gefunden, die auf deine Eingabe passen.
+            {{ searchFilter
+              ? 'Es wurden keine Fehlstunden gefunden, die auf deine Eingabe passen.'
+              : activeTab === 'unexcused'
+                ? 'Es wurden keine deiner Entschuldigungen abgelehnt.'
+                : 'Du hast aktuell keine offenen Fehlstunden zu entschuldigen.' }}
           </p>
         </div>
 
@@ -572,7 +605,7 @@ const percentageClass = (p: number | null) => {
                 @click="openModal(absence)"
                 class="bg-slate-950 hover:bg-slate-850 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >
-                Entschuldigen
+                {{ absence.status === 'unexcused' ? 'Erneut entschuldigen' : 'Entschuldigen' }}
               </button>
             </div>
           </div>
