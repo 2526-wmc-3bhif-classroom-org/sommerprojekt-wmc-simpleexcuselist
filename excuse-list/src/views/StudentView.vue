@@ -392,15 +392,15 @@ const percentageClass = (p: number | null) => {
           </div>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
-          <!-- Open/All toggle (analytics only) -->
-          <div v-if="showAnalytics" class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
-            <button @click="setAnalyticsMode('open')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'open' ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Offen</button>
-            <button @click="setAnalyticsMode('all')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'all' ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Alle</button>
-          </div>
           <!-- List/Analytics toggle -->
           <div class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
-            <button @click="showAnalytics = false" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', !showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Liste</button>
-            <button @click="toggleAnalytics" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Analyse</button>
+            <button @click="showAnalytics = false" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', !showAnalytics ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Liste</button>
+            <button @click="toggleAnalytics" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', showAnalytics ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Analyse</button>
+          </div>
+          <!-- Open/All toggle (analytics only) -->
+          <div v-if="showAnalytics" class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
+            <button @click="setAnalyticsMode('open')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'open' ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Offen</button>
+            <button @click="setAnalyticsMode('all')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'all' ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Alle</button>
           </div>
           <button v-if="!showAnalytics" @click="fetchAbsences()" class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold px-3.5 py-2 text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer">
             <svg class="w-3.5 h-3.5 text-slate-450" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
