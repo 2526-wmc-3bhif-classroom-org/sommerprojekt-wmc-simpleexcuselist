@@ -80,22 +80,26 @@ export async function seedMockTeacher() {
   }
 }
 
-export function getClassBehaviorSummary(className: string) {
+export function getClassBehaviorSummary(
+  className: string,
+  range?: { min: number; max: number } | null,
+) {
   const db = new Unit(true);
-  // Count from Absence table (populated on student login, always reliable).
-  // Excused-in-WebUntis rows are deleted from Absence on sync, so every row
-  // here is still outstanding. status='open' = no excuse submitted at all.
+  const aDateClause  = range ? ` AND a.date  BETWEEN ? AND ?` : '';
+  const alDateClause = range ? ` AND al.date BETWEEN ? AND ?` : '';
+  const rp = range ? [range.min, range.max] : [];
+
   const rows = db.prepare(`
     SELECT s.untisId, s.firstName, s.lastName,
            COUNT(DISTINCT a.id)                                               AS totalHours,
            COUNT(DISTINCT CASE WHEN al.absenceStatus = 'unexcused' THEN al.id END) AS notExcusedHours
     FROM Student s
-    LEFT JOIN Absence a  ON a.studentUntisId  = s.untisId
-    LEFT JOIN AbsenceLesson al ON al.studentUntisId = s.untisId AND al.absenceStatus = 'unexcused'
+    LEFT JOIN Absence       a  ON a.studentUntisId  = s.untisId${aDateClause}
+    LEFT JOIN AbsenceLesson al ON al.studentUntisId = s.untisId AND al.absenceStatus = 'unexcused'${alDateClause}
     WHERE s.className = ?
     GROUP BY s.untisId, s.firstName, s.lastName
     ORDER BY s.lastName ASC, s.firstName ASC
-  `).all(className);
+  `).all(...rp, ...rp, className);
   db.complete(null);
   return rows;
 }

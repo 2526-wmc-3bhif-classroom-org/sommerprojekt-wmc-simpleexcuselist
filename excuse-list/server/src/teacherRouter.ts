@@ -108,7 +108,8 @@ router.get('/api/teacher/students/:studentId/analytics', verifyJwt, requireTeach
 
 router.get('/api/teacher/class/behavior', verifyJwt, requireTeacher, async (req, res) => {
   try {
-    const data = getClassBehaviorSummary(req.user!.className!);
+    const range = buildRange(req.query.from, req.query.to);
+    const data = getClassBehaviorSummary(req.user!.className!, range);
     res.json(data);
   } catch (error: any) {
     console.error('Error fetching behavior summary:', error.message);

@@ -307,6 +307,7 @@ const fetchStudentAbsences = async () => {
 const onRangeChange = () => {
   fetchStudentAbsences()
   if (showAnalytics.value) fetchAnalytics()
+  fetchBehaviorSummary()
 }
 
 const selectStudent = async (student: Student) => {
@@ -438,7 +439,10 @@ const fetchBehaviorSummary = async () => {
   const token = getToken()
   if (!token) return
   try {
-    const res = await fetch('/api/teacher/class/behavior', { headers: { Authorization: `Bearer ${token}` } })
+    const rq = rangeQuery(analyticsFrom.value, analyticsTo.value)
+    const res = await fetch(`/api/teacher/class/behavior${rq ? rq.replace(/^&/, '?') : ''}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
     if (res.ok) behaviorSummary.value = await res.json()
   } catch {}
 }
