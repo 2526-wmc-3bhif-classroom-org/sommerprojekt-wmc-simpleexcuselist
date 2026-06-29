@@ -81,10 +81,10 @@ function currentSemesterRange(): { from: string; to: string; label: string } {
   const year = now.getFullYear()
   if (month >= 9) {
     return { from: `${year}-09-01`, to: `${year + 1}-01-31`, label: `WS ${year}/${String(year + 1).slice(2)}` }
-  } else if (month === 1) {
+  } else if (month <= 2) {
     return { from: `${year - 1}-09-01`, to: `${year}-01-31`, label: `WS ${year - 1}/${String(year).slice(2)}` }
   } else {
-    return { from: `${year}-02-01`, to: `${year}-06-30`, label: `SS ${year}` }
+    return { from: `${year}-03-01`, to: `${year}-09-30`, label: `SS ${year}` }
   }
 }
 
