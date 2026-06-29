@@ -73,6 +73,23 @@ interface ClassAnalyticsPayload {
   studentTable: StudentTopSubjects[]
 }
 
+// ─── Semester helpers ─────────────────────────────────────────────────────────
+
+function currentSemesterRange(): { from: string; to: string; label: string } {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  if (month >= 9) {
+    return { from: `${year}-09-01`, to: `${year + 1}-01-31`, label: `WS ${year}/${String(year + 1).slice(2)}` }
+  } else if (month === 1) {
+    return { from: `${year - 1}-09-01`, to: `${year}-01-31`, label: `WS ${year - 1}/${String(year).slice(2)}` }
+  } else {
+    return { from: `${year}-02-01`, to: `${year}-06-30`, label: `SS ${year}` }
+  }
+}
+
+const SEMESTER = currentSemesterRange()
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const router = useRouter()
@@ -94,16 +111,16 @@ const showAnalytics = ref(false)
 const analyticsMode = ref<'open' | 'all'>('open')
 const analytics = ref<AnalyticsPayload>({ stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0, notExcusedHours: 0 })
 const loadingAnalytics = ref(false)
-// Date-range filter (YYYY-MM-DD from native date inputs); empty = unbounded.
-const analyticsFrom = ref('')
-const analyticsTo = ref('')
+// Global date-range filter — shared across all students (does NOT reset on student switch).
+const analyticsFrom = ref(SEMESTER.from)
+const analyticsTo = ref(SEMESTER.to)
 
 // Class analytics — always over all absences (no open/all toggle).
 const showClassAnalytics = ref(false)
 const classAnalytics = ref<ClassAnalyticsPayload>({ stats: [], heatmap: [], studentTable: [] })
 const loadingClassAnalytics = ref(false)
-const classFrom = ref('')
-const classTo = ref('')
+const classFrom = ref(SEMESTER.from)
+const classTo = ref(SEMESTER.to)
 
 // Behavior summary (all students, all absences regardless of status)
 const behaviorSummary = ref<BehaviorEntry[]>([])
@@ -299,8 +316,7 @@ const selectStudent = async (student: Student) => {
   unexcusedHours.value = 0
   notExcusedHours.value = 0
   analytics.value = { stats: [], heatmap: [], totalHours: 0, unexcusedHours: 0, notExcusedHours: 0 }
-  analyticsFrom.value = ''
-  analyticsTo.value = ''
+  // analyticsFrom / analyticsTo intentionally NOT reset — the global range persists across student switches
   showAnalytics.value = false
   showClassAnalytics.value = false
   listTab.value = 'signed'
@@ -359,15 +375,23 @@ const toggleClassAnalytics = () => {
   fetchClassAnalytics()
 }
 
+const isSemesterDefault = computed(
+  () => analyticsFrom.value === SEMESTER.from && analyticsTo.value === SEMESTER.to,
+)
+
 const clearAnalyticsRange = () => {
-  analyticsFrom.value = ''
-  analyticsTo.value = ''
+  analyticsFrom.value = SEMESTER.from
+  analyticsTo.value = SEMESTER.to
   onRangeChange()
 }
 
+const isClassSemesterDefault = computed(
+  () => classFrom.value === SEMESTER.from && classTo.value === SEMESTER.to,
+)
+
 const clearClassRange = () => {
-  classFrom.value = ''
-  classTo.value = ''
+  classFrom.value = SEMESTER.from
+  classTo.value = SEMESTER.to
   fetchClassAnalytics()
 }
 
@@ -546,18 +570,41 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
           </div>
 
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
-            <!-- Zeitraum filter (applies to the whole analysis below) -->
-            <div class="px-6 py-3 bg-white border-b border-gray-200 flex items-center gap-3 flex-wrap text-sm flex-shrink-0">
-              <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
-              <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
+            <!-- Zeitraum filter (applies to the whole class analysis below) -->
+            <div class="px-4 py-2.5 bg-white border-b border-gray-200 flex items-center gap-2 flex-wrap text-sm flex-shrink-0">
+              <svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Zeitraum</span>
+              <span
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border"
+                :class="isClassSemesterDefault ? 'bg-primary/10 text-primary border-primary/30' : 'bg-gray-100 text-gray-400 border-gray-200'"
+              >
+                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  :style="{ background: isClassSemesterDefault ? 'var(--color-primary, #7C3AED)' : '#9ca3af' }"></span>
+                {{ SEMESTER.label }}
+              </span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs text-gray-400">Von</span>
                 <input type="date" v-model="classFrom" :max="classTo || undefined" @change="fetchClassAnalytics"
-                  class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
-              <span class="text-gray-400">–</span>
-              <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
+                  class="border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition bg-gray-50 hover:bg-white" />
+              </div>
+              <span class="text-gray-300 text-base">—</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs text-gray-400">Bis</span>
                 <input type="date" v-model="classTo" :min="classFrom || undefined" @change="fetchClassAnalytics"
-                  class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
-              <button v-if="classFrom || classTo" @click="clearClassRange"
-                class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
+                  class="border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition bg-gray-50 hover:bg-white" />
+              </div>
+              <button v-if="!isClassSemesterDefault" @click="clearClassRange"
+                class="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/70 font-semibold transition-colors"
+                title="Zum aktuellen Semester zurücksetzen">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Semester
+              </button>
             </div>
 
             <div v-if="loadingClassAnalytics" class="p-12 flex-grow flex items-center justify-center">
@@ -677,18 +724,57 @@ onMounted(() => { fetchStudents(); fetchBehaviorSummary() })
             </div>
           </div>
 
-          <!-- Shared date-range filter — applies to both Liste stats and Analyse -->
-          <div class="flex items-center gap-3 flex-wrap text-sm mb-2">
-            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zeitraum:</span>
-            <label class="flex items-center gap-1.5"><span class="text-gray-500">Von</span>
-              <input type="date" v-model="analyticsFrom" :max="analyticsTo || undefined" @change="onRangeChange"
-                class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
-            <span class="text-gray-400">–</span>
-            <label class="flex items-center gap-1.5"><span class="text-gray-500">Bis</span>
-              <input type="date" v-model="analyticsTo" :min="analyticsFrom || undefined" @change="onRangeChange"
-                class="border border-gray-300 rounded px-2 py-1 text-sm" /></label>
-            <button v-if="analyticsFrom || analyticsTo" @click="clearAnalyticsRange"
-              class="text-xs text-gray-500 hover:text-gray-800 underline">Zurücksetzen</button>
+          <!-- Global date-range filter — persists across student switches -->
+          <div class="flex items-center gap-2 flex-wrap mb-3 bg-white border border-gray-200 rounded-lg px-4 py-2.5 shadow-sm">
+            <!-- Calendar icon -->
+            <svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1">Zeitraum</span>
+
+            <!-- Semester chip -->
+            <span
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border"
+              :class="isSemesterDefault ? 'bg-primary/10 text-primary border-primary/30' : 'bg-gray-100 text-gray-400 border-gray-200'"
+            >
+              <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                :style="{ background: isSemesterDefault ? 'var(--color-primary, #7C3AED)' : '#9ca3af' }"></span>
+              {{ SEMESTER.label }}
+            </span>
+
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs text-gray-400">Von</span>
+              <input
+                type="date" v-model="analyticsFrom" :max="analyticsTo || undefined" @change="onRangeChange"
+                class="border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition bg-gray-50 hover:bg-white"
+              />
+            </div>
+            <span class="text-gray-300 text-base">—</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs text-gray-400">Bis</span>
+              <input
+                type="date" v-model="analyticsTo" :min="analyticsFrom || undefined" @change="onRangeChange"
+                class="border border-gray-200 rounded-md px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition bg-gray-50 hover:bg-white"
+              />
+            </div>
+
+            <button
+              v-if="!isSemesterDefault"
+              @click="clearAnalyticsRange"
+              class="ml-1 inline-flex items-center gap-1 text-xs text-primary hover:text-primary/70 font-semibold transition-colors"
+              title="Zum aktuellen Semester zurücksetzen"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Semester
+            </button>
+
+            <span class="ml-auto text-xs text-gray-400 italic hidden sm:block">
+              Gilt für alle Schüler
+            </span>
           </div>
 
           <!-- Content card -->
