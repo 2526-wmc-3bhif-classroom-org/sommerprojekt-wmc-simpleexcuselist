@@ -390,7 +390,8 @@ export function getStudentAbsenceSummary(
     .get(studentUntisId, className) as any;
   if (!student) { db.complete(null); return null; }
 
-  const dr = dateRangeClause(range);
+  // 'date' without alias — AbsenceLesson has no alias in these queries
+  const dr = dateRangeClause(range, 'date');
   const totalRow = db.prepare(
     `SELECT COUNT(*) AS count FROM AbsenceLesson WHERE studentUntisId = ?${dr.sql}`,
   ).get(studentUntisId, ...dr.params) as any;
