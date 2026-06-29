@@ -10,35 +10,41 @@ import { getSubjectAbsenceStats, getStudentHeatmapData, getStudentAbsenceSummary
 
 const router = Router();
 
+function parseDateInt(v: unknown): number | null {
+  if (typeof v !== 'string') return null;
+  const digits = v.replace(/-/g, '');
+  return /^\d{8}$/.test(digits) ? Number(digits) : null;
+}
+
+function buildRange(from: unknown, to: unknown): { min: number; max: number } | null {
+  const f = parseDateInt(from);
+  const t = parseDateInt(to);
+  if (f == null && t == null) return null;
+  const lo = f ?? 0;
+  const hi = t ?? 99999999;
+  return { min: Math.min(lo, hi), max: Math.max(lo, hi) };
+}
+
 router.get('/api/absences', verifyJwt, async (req, res) => {
   try {
-    console.log(`Fetching absences for user: ${req.user!.username}`);
-
     const studentId = req.user!.untisId!;
-    const absences = getAbsencesByStudent(studentId);
-    console.log(`Fetched ${absences.length} total absences`);
+    const range = buildRange(req.query.from, req.query.to);
 
-    const open = absences.filter((a) => a.status === 'open');
-    console.log(`Filtered to ${open.length} open absences`);
+    const absences = getAbsencesByStudent(studentId, range);
 
-    // The open list drives the actionable "Meine Fehlstunden" view. The stat
-    // cards count lesson-hours (Einheiten) from AbsenceLesson — the full record
-    // that also keeps already-excused lessons, which the Absence table drops on
-    // sync. "Nicht entschuldigt" = everything not excused (open/pending +
-    // teacher-marked unexcused).
     const db = new Unit(true);
     const student = db.prepare(`SELECT className FROM Student WHERE untisId = ?`).get(studentId) as any;
     db.complete(null);
     const summary = student
-      ? getStudentAbsenceSummary(studentId, student.className)
+      ? getStudentAbsenceSummary(studentId, student.className, range)
       : null;
-    const totalCount = summary?.totalHours ?? 0;
-    const missedDays = summary?.missedDays ?? 0;
-    const openCount = summary?.openHours ?? 0;
-    const excusedCount = summary?.excusedHours ?? 0;
-    const unexcusedCount = (summary?.notExcusedHours ?? 0);
+    const totalCount   = summary?.totalHours    ?? 0;
+    const missedDays   = summary?.missedDays    ?? 0;
+    const openCount    = summary?.openHours     ?? 0;
+    const excusedCount = summary?.excusedHours  ?? 0;
+    const unexcusedCount = summary?.notExcusedHours ?? 0;
 
-    res.json({ absences: open, totalCount, missedDays, openCount, excusedCount, unexcusedCount });
+    res.json({ absences, totalCount, missedDays, openCount, excusedCount, unexcusedCount });
   } catch (error: any) {
     console.error('Error fetching absences:', error.message);
     res.status(500).json({ error: 'Error fetching absences' });
@@ -106,6 +112,7 @@ router.get('/api/student/analytics', verifyJwt, requireStudent, async (req, res)
   try {
     const mode: AnalyticsMode = req.query.mode === 'all' ? 'all' : 'open';
     const studentId = req.user!.untisId!;
+    const range = buildRange(req.query.from, req.query.to);
 
     const db = new Unit(true);
     const student = db.prepare(`SELECT className FROM Student WHERE untisId = ?`).get(studentId) as any;
@@ -115,8 +122,8 @@ router.get('/api/student/analytics', verifyJwt, requireStudent, async (req, res)
       return res.status(404).json({ error: 'Student nicht gefunden' });
     }
 
-    const stats = getSubjectAbsenceStats(studentId, student.className, mode);
-    const heatmap = getStudentHeatmapData(studentId, student.className, mode);
+    const stats = getSubjectAbsenceStats(studentId, student.className, mode, range);
+    const heatmap = getStudentHeatmapData(studentId, student.className, mode, range);
     res.json({ stats, heatmap });
   } catch (error: any) {
     console.error('Error fetching student analytics:', error.message);

@@ -50,13 +50,18 @@ export function syncAbsences(db: Unit, absences: any[], personId: number): any[]
   return absences;
 }
 
-export function getAbsencesByStudent(untisId: number): any[] {
+export function getAbsencesByStudent(
+  untisId: number,
+  range?: { min: number; max: number } | null,
+): any[] {
   const db = new Unit(true);
+  const dateClause = range ? ` AND date BETWEEN ? AND ?` : '';
+  const dateParams = range ? [range.min, range.max] : [];
   const absences = db.prepare(`
     SELECT * FROM Absence
-    WHERE studentUntisId = ?
+    WHERE studentUntisId = ?${dateClause}
     ORDER BY date DESC
-  `).all(untisId);
+  `).all(untisId, ...dateParams);
   db.complete(null);
   return absences as any[];
 }

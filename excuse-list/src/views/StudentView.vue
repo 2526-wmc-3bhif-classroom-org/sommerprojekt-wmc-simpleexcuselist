@@ -38,6 +38,17 @@ interface Absence {
   status: string;
 }
 
+// ─── Semester helper ─────────────────────────────────────────────────────────
+function currentSemesterRange(): { from: string; to: string; label: string } {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  if (month >= 9)   return { from: `${year}-09-01`,     to: `${year + 1}-01-31`, label: `WS ${year}/${String(year + 1).slice(2)}` };
+  if (month <= 2)   return { from: `${year - 1}-09-01`, to: `${year}-01-31`,     label: `WS ${year - 1}/${String(year).slice(2)}` };
+  return               { from: `${year}-03-01`,     to: `${year}-09-30`,     label: `SS ${year}` };
+}
+const SEMESTER = currentSemesterRange();
+
 const absences = ref<Absence[]>([]);
 const totalCount = ref(0);
 const missedDays = ref(0);
@@ -48,7 +59,15 @@ const loading = ref(true);
 const error = ref('');
 const router = useRouter();
 
-// --- Filter State ---
+// --- Date range filter ---
+const dateFrom = ref(SEMESTER.from);
+const dateTo   = ref(SEMESTER.to);
+const isSemesterDefault = computed(() => dateFrom.value === SEMESTER.from && dateTo.value === SEMESTER.to);
+
+// --- Status tab filter ---
+const statusTab = ref<'all' | 'open' | 'pending' | 'signed' | 'excused' | 'unexcused'>('all');
+
+// --- Search Filter ---
 const searchFilter = ref('');
 
 // --- Modal/Drawer State ---
@@ -72,6 +91,14 @@ const formatTime = (timeNum: number) => {
   return `${s.substring(0, 2)}:${s.substring(2, 4)}`;
 };
 
+const rangeQuery = (from: string, to: string) => {
+  const p = new URLSearchParams();
+  if (from) p.set('from', from);
+  if (to)   p.set('to', to);
+  const s = p.toString();
+  return s ? `?${s}` : '';
+};
+
 // `silent` skips the loading spinner / error banner — used for the background
 // refetches that catch up with the post-login timetable sync.
 const fetchAbsences = async (silent = false) => {
@@ -79,7 +106,7 @@ const fetchAbsences = async (silent = false) => {
   if (!token) { router.push('/'); return; }
   if (!silent) { loading.value = true; error.value = ''; }
   try {
-    const response = await fetch('/api/absences', {
+    const response = await fetch(`/api/absences${rangeQuery(dateFrom.value, dateTo.value)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) {
@@ -135,11 +162,29 @@ const logout = () => {
 const totalAbsenceCount = computed(() => totalCount.value);
 const openAbsenceCount = computed(() => unexcusedCount.value);
 
+const onRangeChange = () => {
+  fetchAbsences();
+  if (showAnalytics.value) fetchAnalytics();
+};
+
+const resetToSemester = () => {
+  dateFrom.value = SEMESTER.from;
+  dateTo.value   = SEMESTER.to;
+  onRangeChange();
+};
+
 // --- Filtered Absences ---
 const filteredAbsences = computed(() => {
-  if (!searchFilter.value) return absences.value;
+  let list = absences.value;
+  if (statusTab.value !== 'all') {
+    list = list.filter(a => {
+      if (statusTab.value === 'excused') return a.isExcusedUntis || a.status === 'excused';
+      return a.status === statusTab.value;
+    });
+  }
+  if (!searchFilter.value) return list;
   const term = searchFilter.value.trim().toLowerCase();
-  return absences.value.filter(a => {
+  return list.filter(a => {
     const dateStr = formatDate(a.date);
     const timeStr = `${formatTime(a.startTime)} - ${formatTime(a.endTime)}`;
     return dateStr.toLowerCase().includes(term) || timeStr.toLowerCase().includes(term);
@@ -263,7 +308,9 @@ const fetchAnalytics = async () => {
   if (!token) { router.push('/'); return; }
   loadingAnalytics.value = true;
   try {
-    const res = await fetch(`/api/student/analytics?mode=${analyticsMode.value}`, {
+    const rq = rangeQuery(dateFrom.value, dateTo.value);
+    const sep = rq ? '&' : '?';
+    const res = await fetch(`/api/student/analytics${rq}${sep}mode=${analyticsMode.value}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(`Fehler beim Laden der Analyse (${res.status})`);
@@ -347,7 +394,7 @@ const percentageClass = (p: number | null) => {
           </h2>
           <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
             <template v-if="!showAnalytics">
-              Stundenübersicht für dieses Schuljahr.
+              Stundenübersicht für den gewählten Zeitraum.
             </template>
             <template v-else>
               Stundenplan- und Fachstatistiken deiner Abwesenheiten.
@@ -407,6 +454,45 @@ const percentageClass = (p: number | null) => {
             Aktualisieren
           </button>
         </div>
+      </div>
+
+      <!-- Semester / Date Filter Bar -->
+      <div class="flex items-center gap-2 flex-wrap bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-2.5 shadow-sm transition-colors">
+        <svg class="w-4 h-4 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-1">Zeitraum</span>
+
+        <!-- Semester chip -->
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border transition-colors"
+          :class="isSemesterDefault
+            ? 'bg-primary/10 text-primary border-primary/30 dark:bg-primary/20'
+            : 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800 dark:border-slate-700'">
+          <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+            :style="{ background: isSemesterDefault ? 'var(--color-primary, #7C3AED)' : '#9ca3af' }"></span>
+          {{ SEMESTER.label }}
+        </span>
+
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs text-slate-400">Von</span>
+          <input type="date" v-model="dateFrom" :max="dateTo || undefined" @change="onRangeChange"
+            class="border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1 text-sm text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition hover:bg-white dark:hover:bg-slate-900"/>
+        </div>
+        <span class="text-slate-300 dark:text-slate-600 text-base">—</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs text-slate-400">Bis</span>
+          <input type="date" v-model="dateTo" :min="dateFrom || undefined" @change="onRangeChange"
+            class="border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1 text-sm text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition hover:bg-white dark:hover:bg-slate-900"/>
+        </div>
+
+        <button v-if="!isSemesterDefault" @click="resetToSemester"
+          class="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/70 font-semibold transition-colors"
+          title="Zum aktuellen Semester zurücksetzen">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Semester
+        </button>
       </div>
 
       <!-- Content Area -->
@@ -487,7 +573,8 @@ const percentageClass = (p: number | null) => {
           <!-- List View -->
 
           <!-- Filter Bar -->
-          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 p-4 rounded-2xl shadow-sm transition-colors duration-300">
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-900 p-4 rounded-2xl shadow-sm transition-colors duration-300 space-y-3">
+            <!-- Search -->
             <div class="relative w-full">
               <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg class="h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -500,6 +587,31 @@ const percentageClass = (p: number | null) => {
                 placeholder="Nach Datum oder Uhrzeit filtern (z.B. 15.01...)"
                 class="block w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm transition-all"
               />
+            </div>
+            <!-- Status Tabs -->
+            <div class="flex flex-wrap gap-1.5">
+              <button v-for="tab in [
+                { key: 'all',        label: 'Alle',               cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' },
+                { key: 'open',       label: 'Offen',              cls: 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400' },
+                { key: 'pending',    label: 'Abgeschickt',        cls: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400' },
+                { key: 'signed',     label: 'Unterschrieben',     cls: 'bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400' },
+                { key: 'excused',    label: 'Entschuldigt',       cls: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400' },
+                { key: 'unexcused',  label: 'Nicht entschuldigt', cls: 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400' },
+              ]" :key="tab.key"
+                @click="statusTab = tab.key as typeof statusTab.value"
+                :class="[
+                  'px-3 py-1 rounded-lg text-xs font-semibold transition-all border',
+                  statusTab === tab.key
+                    ? tab.cls + ' border-current ring-1 ring-current/30'
+                    : 'bg-transparent text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                ]"
+              >{{ tab.label }}
+                <span class="ml-1 opacity-60 tabular-nums">
+                  ({{ tab.key === 'all' ? absences.length
+                    : tab.key === 'excused' ? absences.filter(a => a.isExcusedUntis || a.status === 'excused').length
+                    : absences.filter(a => a.status === tab.key).length }})
+                </span>
+              </button>
             </div>
           </div>
 
@@ -520,9 +632,9 @@ const percentageClass = (p: number | null) => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 class="text-base font-bold text-slate-950 dark:text-white tracking-tight">Keine offenen Fehlstunden</h3>
+          <h3 class="text-base font-bold text-slate-950 dark:text-white tracking-tight">Keine Fehlstunden gefunden</h3>
           <p class="text-slate-500 dark:text-slate-400 text-xs mt-1.5 max-w-xs leading-relaxed">
-            Es wurden keine Fehlstunden gefunden, die auf deine Eingabe passen.
+            Für den gewählten Zeitraum und Filter wurden keine Fehlstunden gefunden.
           </p>
         </div>
 
@@ -565,10 +677,10 @@ const percentageClass = (p: number | null) => {
               >Offen</span>
             </div>
 
-            <!-- Action button only -->
+            <!-- Action button only for open absences -->
             <div class="flex items-center justify-end border-t sm:border-0 border-slate-100 dark:border-slate-800/80 pt-2.5 sm:pt-0">
               <button
-                v-if="!absence.isExcusedUntis"
+                v-if="absence.status === 'open' && !absence.isExcusedUntis"
                 @click="openModal(absence)"
                 class="bg-slate-950 hover:bg-slate-850 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >
