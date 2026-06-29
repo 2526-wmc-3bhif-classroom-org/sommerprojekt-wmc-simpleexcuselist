@@ -41,21 +41,45 @@ const cellLabel = (p: number, d: number): string => {
   return `${subs[0]}+${subs.length - 1}`
 }
 
+// Relative intensity tier: 0 (none) … 4 (worst), scaled against the busiest cell
+// so the heaviest absences always reach the top tier regardless of absolute count.
+const cellTier = (p: number, d: number): number => {
+  const count = cellCount(p, d)
+  if (count <= 0) return 0
+  return Math.min(4, Math.ceil((count / (maxCount.value || 1)) * 4))
+}
+
+// Discrete fill opacity per tier — stepped (not a smooth ramp) so adjacent tiers
+// read clearly apart instead of blending together.
+const TIER_ALPHA = [0, 0.3, 0.52, 0.74, 1] as const
+
+// Second channel: the count numeral grows with tier, so frequently-missed lessons
+// stand out by size as well as colour — noticeable even at a glance.
+const TIER_NUM_CLASS = ['', 'text-[10px]', 'text-[12px]', 'text-[14px]', 'text-[16px]'] as const
+
+const cellNumClass = (p: number, d: number): string => TIER_NUM_CLASS[cellTier(p, d)]!
+
 function cellStyle(p: number, d: number): Record<string, string> {
   const count = cellCount(p, d)
-  if (count <= 0) return { background: '#f1f5f9', color: '#cbd5e1' }
-  const alpha = 0.28 + 0.72 * (count / (maxCount.value || 1))
+  if (count <= 0) return { background: '#f1f5f9', color: '#cbd5e1', borderColor: 'transparent' }
+  const tier = cellTier(p, d)
+  const alpha = TIER_ALPHA[tier]!
+  // Ring thickens for the top tiers — a third reinforcing size cue on the worst offenders.
+  const borderWidth = tier >= 3 ? '2px' : '1px'
   const primary = cellSubjects(p, d)[0]
   if (primary) {
     return {
       background: subjectBg(primary, alpha),
       color: subjectFg(alpha),
-      borderColor: subjectBg(primary, Math.min(1, alpha + 0.2)),
+      borderColor: subjectBg(primary, Math.min(1, alpha + 0.25)),
+      borderWidth,
     }
   }
   return {
     background: `rgba(37,99,235,${alpha})`,
     color: alpha > 0.55 ? '#ffffff' : '#1e3a8a',
+    borderColor: `rgba(37,99,235,${Math.min(1, alpha + 0.25)})`,
+    borderWidth,
   }
 }
 
@@ -114,7 +138,10 @@ const cellTooltip = (p: number, d: number): string => {
               <span class="text-[12px] font-black leading-tight tracking-tight px-1 truncate w-full text-center">
                 {{ cellLabel(p, di) }}
               </span>
-              <span class="text-[9px] font-semibold leading-tight opacity-80">
+              <span
+                class="font-bold leading-tight opacity-90 tabular-nums"
+                :class="cellNumClass(p, di)"
+              >
                 {{ cellCount(p, di) }}&thinsp;×
               </span>
             </template>
@@ -139,7 +166,7 @@ const cellTooltip = (p: number, d: number): string => {
     </div>
 
     <p class="text-[11px] text-gray-400">
-      Zelle = Wochentag × Einheit · Zahl = versäumte Stunden · dunkler = mehr Fehlstunden
+      Zelle = Wochentag × Einheit · Zahl = versäumte Stunden · dunkler &amp; größer = mehr Fehlstunden
     </p>
   </div>
 </template>

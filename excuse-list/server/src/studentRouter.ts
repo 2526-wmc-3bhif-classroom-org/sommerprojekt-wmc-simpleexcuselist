@@ -32,6 +32,7 @@ router.get('/api/absences', verifyJwt, async (req, res) => {
 
     const absences = getAbsencesByStudent(studentId, range);
 
+
     const db = new Unit(true);
     const student = db.prepare(`SELECT className FROM Student WHERE untisId = ?`).get(studentId) as any;
     db.complete(null);

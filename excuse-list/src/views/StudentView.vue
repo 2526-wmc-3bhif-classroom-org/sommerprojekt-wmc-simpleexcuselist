@@ -70,6 +70,10 @@ const statusTab = ref<'all' | 'open' | 'pending' | 'signed' | 'excused' | 'unexc
 // --- Search Filter ---
 const searchFilter = ref('');
 
+// Which bucket the list shows: 'open' (no excuse yet, submit) vs 'unexcused'
+// (teacher refused — student can resubmit a new excuse).
+const activeTab = ref<'open' | 'unexcused'>('open');
+
 // --- Modal/Drawer State ---
 const showModal = ref(false);
 const activeAbsence = ref<Absence | null>(null);
@@ -439,15 +443,15 @@ const percentageClass = (p: number | null) => {
           </div>
         </div>
         <div class="flex items-center gap-3 flex-wrap">
-          <!-- Open/All toggle (analytics only) -->
-          <div v-if="showAnalytics" class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
-            <button @click="setAnalyticsMode('open')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'open' ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Offen</button>
-            <button @click="setAnalyticsMode('all')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'all' ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Alle</button>
-          </div>
           <!-- List/Analytics toggle -->
           <div class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
-            <button @click="showAnalytics = false" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', !showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Liste</button>
-            <button @click="toggleAnalytics" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', showAnalytics ? 'bg-slate-100 dark:bg-slate-805 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Analyse</button>
+            <button @click="showAnalytics = false" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', !showAnalytics ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Liste</button>
+            <button @click="toggleAnalytics" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', showAnalytics ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Analyse</button>
+          </div>
+          <!-- Open/All toggle (analytics only) -->
+          <div v-if="showAnalytics" class="flex space-x-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 shadow-sm transition-colors duration-300">
+            <button @click="setAnalyticsMode('open')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'open' ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Offen</button>
+            <button @click="setAnalyticsMode('all')" :class="['px-4 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors', analyticsMode === 'all' ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300']">Alle</button>
           </div>
           <button v-if="!showAnalytics" @click="fetchAbsences()" class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold px-3.5 py-2 text-xs rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer">
             <svg class="w-3.5 h-3.5 text-slate-450" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -615,6 +619,24 @@ const percentageClass = (p: number | null) => {
             </div>
           </div>
 
+          <!-- View toggle: actionable ('Offen') vs. rejected ('Nicht entschuldigt') -->
+          <div class="flex gap-1 p-1 mb-6 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-900 w-full sm:w-fit">
+            <button
+              @click="activeTab = 'open'"
+              :class="activeTab === 'open' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+            >
+              Offen <span class="ml-1 opacity-70">{{ openTabCount }}</span>
+            </button>
+            <button
+              @click="activeTab = 'unexcused'"
+              :class="activeTab === 'unexcused' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+              class="flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+            >
+              Nicht entschuldigt <span class="ml-1 opacity-70">{{ unexcusedTabCount }}</span>
+            </button>
+          </div>
+
           <div v-if="loading" class="flex justify-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-900 transition-colors duration-300">
 
           <div class="w-7 h-7 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
@@ -684,7 +706,7 @@ const percentageClass = (p: number | null) => {
                 @click="openModal(absence)"
                 class="bg-slate-950 hover:bg-slate-850 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
               >
-                Entschuldigen
+                {{ absence.status === 'unexcused' ? 'Erneut entschuldigen' : 'Entschuldigen' }}
               </button>
             </div>
           </div>
