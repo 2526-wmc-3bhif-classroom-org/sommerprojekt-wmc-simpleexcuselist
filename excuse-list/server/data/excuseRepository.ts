@@ -80,6 +80,34 @@ export function insertAttachments(db: Unit, absenceId: string, attachments: any[
   }
 }
 
+export function getAllAbsencesByParent(
+  parentId: string,
+  range?: { min: number; max: number } | null,
+): any[] {
+  const db = new Unit(true);
+  const dateClause = range ? ` AND a.date BETWEEN ? AND ?` : '';
+  const dateParams: (string | number)[] = range ? [parentId, range.min, range.max] : [parentId];
+  const absences = db.prepare(`
+    SELECT
+      a.id,
+      a.date,
+      a.startTime,
+      a.endTime,
+      a.status,
+      a.isExcusedUntis,
+      a.excuseMessage,
+      s.firstName as studentFirstName,
+      s.lastName as studentLastName
+    FROM Absence a
+    JOIN StudentParent sp ON sp.studentUntisId = a.studentUntisId
+    JOIN Student s ON s.untisId = a.studentUntisId
+    WHERE sp.parentId = ?${dateClause}
+    ORDER BY a.date DESC
+  `).all(...dateParams);
+  db.complete(null);
+  return absences as any[];
+}
+
 export function getParentPendingAbsences(parentId: string) {
   const db = new Unit(true);
   const absences = db.prepare(`
